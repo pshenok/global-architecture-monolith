@@ -11,7 +11,7 @@ const registry = JSON.parse(readFileSync(new URL('modules.json', ROOT), 'utf8'))
 export const BASE_URL = process.env.E2E_BASE_URL ?? `https://localhost:${registry.api.httpsPort}`;
 /** What the local stack's certificate is trusted by (tools/dev-certs.ts: mkcert's root or the certificate). */
 export const CA = readFileSync(new URL('.certs/dev-ca.pem', ROOT));
-/** The stack's local OIDC provider (tools/dev-idp.ts). */
+/** The stack's local OIDC provider (tools/dev-idp/main.ts). */
 export const IDP_URL = `http://127.0.0.1:${registry.devIdp.port}`;
 
 /** HTTPS client that trusts the local dev certificate and negotiates HTTP/2 when offered. */
