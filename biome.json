@@ -1,0 +1,140 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!pnpm-lock.yaml",
+      "!**/dist",
+      "!**/coverage",
+      "!**/.turbo",
+      "!**/drizzle/**/snapshot.json",
+      "!.claude/worktrees"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "parser": {
+      "unsafeParameterDecoratorsEnabled": true
+    },
+    "formatter": {
+      "quoteStyle": "single",
+      "trailingCommas": "all",
+      "semicolons": "always"
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "domains": {
+      "project": "recommended"
+    },
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        "useImportType": "off",
+        "useNodejsImportProtocol": "error"
+      },
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error"
+      },
+      "suspicious": {
+        "noImportCycles": "error",
+        "noExplicitAny": "error"
+      },
+      "complexity": {
+        "noStaticOnlyClass": "off"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/src/domain/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "@nestjs/*",
+                      "drizzle-orm",
+                      "drizzle-orm/*",
+                      "pg",
+                      "fastify",
+                      "zod",
+                      "nestjs-cls",
+                      "@nestjs-cls/*",
+                      "@gam/*",
+                      "!@gam/kernel"
+                    ],
+                    "message": "The domain layer is pure TypeScript: import only @gam/kernel and other domain files of this module."
+                  },
+                  {
+                    "group": ["**/application/**", "**/infrastructure/**", "**/transport/**"],
+                    "message": "Domain code must not import other layers; depend on ports defined in the domain instead."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/src/application/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "drizzle-orm",
+                      "drizzle-orm/*",
+                      "pg",
+                      "fastify",
+                      "@nestjs/platform-fastify",
+                      "@nestjs/swagger",
+                      "@nestjs-cls/*"
+                    ],
+                    "message": "The application layer depends on domain ports only, never on HTTP or persistence."
+                  },
+                  {
+                    "group": ["@gam/*", "!@gam/kernel", "!@gam/kernel/testing"],
+                    "message": "The application layer depends on ports: the platform kit is used by adapters (infrastructure, transport), and another module is reached through an adapter of a port in application/ports."
+                  },
+                  {
+                    "group": ["**/infrastructure/**", "**/transport/**"],
+                    "message": "The application layer depends on ports, never on adapters; bind adapters in the module's composition root."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

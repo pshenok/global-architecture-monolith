@@ -1,0 +1,599 @@
+{
+  "type": "base",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "65d82ebd-eb62-4277-a957-c156437f09a9",
+  "prevIds": [
+    "00000000-0000-0000-0000-000000000000"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_schema",
+      "statementTarget": [
+        "schema",
+        "events"
+      ],
+      "writes": [
+        "s|sch|events",
+        "n|sch|events",
+        "e|sch|events"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "events",
+        "deliveries"
+      ],
+      "writes": [
+        "s|tbl|events.deliveries",
+        "n|tbl|events.deliveries",
+        "e|tbl|events.deliveries",
+        "n|rel|events.deliveries",
+        "n|type|events.deliveries",
+        "n|rel|events.deliveries_pkey"
+      ],
+      "reads": [
+        "n|sch|events"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "events",
+        "events"
+      ],
+      "writes": [
+        "s|tbl|events.events",
+        "n|tbl|events.events",
+        "e|tbl|events.events",
+        "n|rel|events.events",
+        "n|type|events.events",
+        "n|rel|events.events_pkey"
+      ],
+      "reads": [
+        "n|sch|events"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "events",
+        "deliveries",
+        "deliveries_due_idx"
+      ],
+      "writes": [
+        "s|idx|events.deliveries_due_idx",
+        "n|idx|events.deliveries_due_idx",
+        "e|idx|events.deliveries_due_idx",
+        "n|rel|events.deliveries_due_idx"
+      ],
+      "reads": [
+        "n|tbl|events.deliveries",
+        "n|sch|events",
+        "n|col|events.deliveries.available_at",
+        "n|col|events.deliveries.event_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "events",
+        "deliveries",
+        "deliveries_subscriber_type_status_idx"
+      ],
+      "writes": [
+        "s|idx|events.deliveries_subscriber_type_status_idx",
+        "n|idx|events.deliveries_subscriber_type_status_idx",
+        "e|idx|events.deliveries_subscriber_type_status_idx",
+        "n|rel|events.deliveries_subscriber_type_status_idx"
+      ],
+      "reads": [
+        "n|tbl|events.deliveries",
+        "n|sch|events",
+        "n|col|events.deliveries.subscriber",
+        "n|col|events.deliveries.type",
+        "n|col|events.deliveries.status"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "events",
+        "deliveries",
+        "deliveries_event_id_idx"
+      ],
+      "writes": [
+        "s|idx|events.deliveries_event_id_idx",
+        "n|idx|events.deliveries_event_id_idx",
+        "e|idx|events.deliveries_event_id_idx",
+        "n|rel|events.deliveries_event_id_idx"
+      ],
+      "reads": [
+        "n|tbl|events.deliveries",
+        "n|sch|events",
+        "n|col|events.deliveries.event_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "events",
+        "events",
+        "events_type_occurred_at_idx"
+      ],
+      "writes": [
+        "s|idx|events.events_type_occurred_at_idx",
+        "n|idx|events.events_type_occurred_at_idx",
+        "e|idx|events.events_type_occurred_at_idx",
+        "n|rel|events.events_type_occurred_at_idx"
+      ],
+      "reads": [
+        "n|tbl|events.events",
+        "n|sch|events",
+        "n|col|events.events.type",
+        "n|col|events.events.occurred_at"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "events",
+        "events",
+        "events_occurred_at_idx"
+      ],
+      "writes": [
+        "s|idx|events.events_occurred_at_idx",
+        "n|idx|events.events_occurred_at_idx",
+        "e|idx|events.events_occurred_at_idx",
+        "n|rel|events.events_occurred_at_idx"
+      ],
+      "reads": [
+        "n|tbl|events.events",
+        "n|sch|events",
+        "n|col|events.events.occurred_at"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "events",
+        "deliveries"
+      ],
+      "writes": [
+        "s|fk|events.deliveries.deliveries_event_id_events_id_fkey",
+        "n|fk|events.deliveries.deliveries_event_id_events_id_fkey",
+        "e|fk|events.deliveries.deliveries_event_id_events_id_fkey",
+        "n|con|events.deliveries.deliveries_event_id_events_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|events.deliveries",
+        "n|sch|events",
+        "n|tbl|events.events",
+        "n|sch|events",
+        "n|col|events.deliveries.event_id",
+        "n|col|events.events.id",
+        "e|uniqueness|events.events.id"
+      ]
+    }
+  ],
+  "ddl": [
+    {
+      "name": "events",
+      "entityType": "schemas"
+    },
+    {
+      "schema": "events",
+      "name": "deliveries",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "events",
+      "name": "events",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "events",
+      "table": "deliveries",
+      "name": "subscriber",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "events",
+      "table": "deliveries",
+      "name": "event_id",
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "events",
+      "table": "deliveries",
+      "name": "type",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "events",
+      "table": "deliveries",
+      "name": "status",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'pending'",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "events",
+      "table": "deliveries",
+      "name": "attempts",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "events",
+      "table": "deliveries",
+      "name": "available_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "events",
+      "table": "deliveries",
+      "name": "last_error",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "events",
+      "table": "deliveries",
+      "name": "delivered_at",
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "events",
+      "table": "events",
+      "name": "id",
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "events",
+      "table": "events",
+      "name": "type",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "events",
+      "table": "events",
+      "name": "producer",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "events",
+      "table": "events",
+      "name": "aggregate_id",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "events",
+      "table": "events",
+      "name": "occurred_at",
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "events",
+      "table": "events",
+      "name": "payload",
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "events",
+      "table": "events",
+      "name": "request_id",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "events",
+      "table": "events",
+      "name": "traceparent",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "events",
+      "table": "deliveries",
+      "name": "deliveries_due_idx",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "available_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "event_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": "\"status\" = 'pending'",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "events",
+      "table": "deliveries",
+      "name": "deliveries_subscriber_type_status_idx",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "subscriber",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "type",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "status",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "events",
+      "table": "deliveries",
+      "name": "deliveries_event_id_idx",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "event_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "events",
+      "table": "events",
+      "name": "events_type_occurred_at_idx",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "type",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "occurred_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "events",
+      "table": "events",
+      "name": "events_occurred_at_idx",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "occurred_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "events",
+      "table": "deliveries",
+      "name": "deliveries_event_id_events_id_fkey",
+      "nameExplicit": false,
+      "columns": [
+        "event_id"
+      ],
+      "schemaTo": "events",
+      "tableTo": "events",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "entityType": "fks"
+    },
+    {
+      "schema": "events",
+      "table": "deliveries",
+      "name": "deliveries_pkey",
+      "columns": [
+        "subscriber",
+        "event_id"
+      ],
+      "nameExplicit": true,
+      "entityType": "pks"
+    },
+    {
+      "schema": "events",
+      "table": "events",
+      "name": "events_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "events",
+      "table": "deliveries",
+      "name": "deliveries_status_check",
+      "value": "\"status\" in ('pending', 'delivered', 'dead')",
+      "entityType": "checks"
+    },
+    {
+      "schema": "events",
+      "table": "events",
+      "name": "events_payload_size_check",
+      "value": "octet_length(\"payload\"::text) <= 65536",
+      "entityType": "checks"
+    }
+  ]
+}

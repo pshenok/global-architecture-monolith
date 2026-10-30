@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/.turbo
+**/.vitest
+**/coverage
+**/.env
+.certs
+_reference
+.git

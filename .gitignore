@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+.turbo/
+.vitest/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.certs/
+_reference/
+*.log
+.DS_Store
+.claude/worktrees/

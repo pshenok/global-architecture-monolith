@@ -1,0 +1,68 @@
+{
+  "name": "global-architecture-monolith",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Modular monolith: one NestJS 12 HTTPS REST API built from feature modules with enforced boundaries, a shared platform kit, a module template and Claude Code skills.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^26.12.1",
+      "onFail": "download"
+    },
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^12.15.0",
+      "onFail": "download"
+    }
+  },
+  "engines": {
+    "node": ">=26.12.1"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck && tsc -p tsconfig.json",
+    "test": "turbo run test",
+    "lint": "biome ci . && node tools/check-access.ts && node tools/check-boundaries.ts && turbo run lint",
+    "format": "biome check --write .",
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "new:module": "node tools/new-module.ts",
+    "template:verify": "node tools/verify-template.ts",
+    "certs": "node tools/dev-certs.ts",
+    "dev": "pnpm --filter @gam/api dev",
+    "dev:token": "node tools/dev-token.ts",
+    "db:setup": "node tools/db-setup.ts",
+    "db:migrate": "pnpm --filter @gam/api db:migrate",
+    "users:grant-role": "pnpm --filter @gam/api role grant",
+    "users:revoke-role": "pnpm --filter @gam/api role revoke",
+    "events:status": "pnpm --filter @gam/api events status",
+    "events:redrive": "pnpm --filter @gam/api events redrive",
+    "events:replay": "pnpm --filter @gam/api events replay",
+    "events:drop": "pnpm --filter @gam/api events drop",
+    "stack:up": "node tools/stack.ts up",
+    "stack:down": "node tools/stack.ts down",
+    "stack:status": "pm2 status",
+    "stack:logs": "pm2 logs",
+    "test:e2e": "vitest run --config tests/e2e/vitest.config.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "catalog:",
+    "@swc/cli": "catalog:",
+    "@swc/core": "catalog:",
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "chokidar": "catalog:",
+    "jose": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:",
+    "pg": "catalog:",
+    "pm2": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:",
+    "undici": "catalog:",
+    "unplugin-swc": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

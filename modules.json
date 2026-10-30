@@ -1,0 +1,35 @@
+{
+  "$comment": "Local registry of the app and its feature modules: ports, the database and each module's Postgres schema, used by the local stack (PM2), db:setup, check-boundaries and new:module. Managed by `pnpm new:module`.",
+  "api": {
+    "name": "api",
+    "dir": "apps/api",
+    "package": "@gam/api",
+    "httpsPort": 9443,
+    "database": "gam"
+  },
+  "devIdp": {
+    "port": 9090
+  },
+  "testDatabase": "gam_test",
+  "modules": [
+    {
+      "name": "users",
+      "dir": "modules/users",
+      "package": "@gam/users",
+      "schema": "users"
+    },
+    {
+      "name": "houses",
+      "dir": "modules/houses",
+      "package": "@gam/houses",
+      "schema": "houses"
+    },
+    {
+      "name": "bookings",
+      "dir": "modules/bookings",
+      "package": "@gam/bookings",
+      "schema": "bookings",
+      "extensions": ["btree_gist"]
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "name": "@gam/platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Platform kit of the monolith: config, logging, request context, HTTPS bootstrap, problem details, OIDC authentication and route access policies, database (Drizzle + pg) with transactions and migrations, in-process events, and test helpers.",
+  "type": "module",
+  "files": [
+    "dist",
+    "drizzle"
+  ],
+  "exports": {
+    ".": {
+      "@gam/source": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "@gam/source": "./src/testing/index.ts",
+      "default": "./dist/testing/index.js"
+    },
+    "./telemetry": {
+      "@gam/source": "./src/telemetry/instrumentation.ts",
+      "default": "./dist/telemetry/instrumentation.js"
+    }
+  },
+  "scripts": {
+    "build": "swc src -d dist --strip-leading-paths --config-file ../../.swcrc --ignore \"**/*.spec.ts\" && node ../../tools/check-esm.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@fastify/otel": "catalog:",
+    "@gam/kernel": "workspace:*",
+    "@nestjs-cls/transactional": "catalog:",
+    "@nestjs-cls/transactional-adapter-drizzle-orm": "catalog:",
+    "@nestjs/common": "catalog:",
+    "@nestjs/core": "catalog:",
+    "@nestjs/platform-fastify": "catalog:",
+    "@nestjs/swagger": "catalog:",
+    "@nestjs/testing": "catalog:",
+    "@nestjs/throttler": "catalog:",
+    "@opentelemetry/api": "catalog:",
+    "@opentelemetry/instrumentation-http": "catalog:",
+    "@opentelemetry/instrumentation-pg": "catalog:",
+    "@opentelemetry/instrumentation-pino": "catalog:",
+    "@opentelemetry/sdk-node": "catalog:",
+    "@scalar/nestjs-api-reference": "catalog:",
+    "drizzle-orm": "catalog:",
+    "fastify": "catalog:",
+    "import-in-the-middle": "catalog:",
+    "jose": "catalog:",
+    "nestjs-cls": "catalog:",
+    "nestjs-pino": "catalog:",
+    "pg": "catalog:",
+    "pino": "catalog:",
+    "pino-http": "catalog:",
+    "pino-pretty": "catalog:",
+    "reflect-metadata": "catalog:",
+    "rxjs": "catalog:",
+    "uuid": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/pg": "catalog:",
+    "drizzle-kit": "catalog:",
+    "undici": "catalog:"
+  }
+}

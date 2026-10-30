@@ -1,0 +1,19 @@
+{
+  "$schema": "https://swc.rs/schema.json",
+  "sourceMaps": true,
+  "jsc": {
+    "parser": { "syntax": "typescript", "decorators": true, "dynamicImport": true },
+    "target": "es2024",
+    "keepClassNames": true,
+    "rewriteRelativeImportExtensions": true,
+    "transform": {
+      "legacyDecorator": true,
+      "decoratorMetadata": true,
+      "useDefineForClassFields": true,
+      "verbatimModuleSyntax": true
+    },
+    "experimental": { "keepImportAttributes": true }
+  },
+  "module": { "type": "es6", "strict": true },
+  "minify": false
+}
