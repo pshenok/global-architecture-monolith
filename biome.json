@@ -66,7 +66,7 @@
   },
   "overrides": [
     {
-      "includes": ["**/src/domain/**"],
+      "includes": ["**/src/domain/**", "!**/*.spec.ts"],
       "linter": {
         "rules": {
           "style": {
@@ -85,6 +85,7 @@
                       "nestjs-cls",
                       "@nestjs-cls/*",
                       "@gam/*",
+                      "@gam/*/*",
                       "!@gam/kernel"
                     ],
                     "message": "The domain layer is pure TypeScript: import only @gam/kernel and other domain files of this module."
@@ -101,7 +102,7 @@
       }
     },
     {
-      "includes": ["**/src/application/**"],
+      "includes": ["**/src/application/**", "!**/*.spec.ts"],
       "linter": {
         "rules": {
           "style": {
@@ -122,7 +123,7 @@
                     "message": "The application layer depends on domain ports only, never on HTTP or persistence."
                   },
                   {
-                    "group": ["@gam/*", "!@gam/kernel", "!@gam/kernel/testing"],
+                    "group": ["@gam/*", "@gam/*/*", "!@gam/kernel"],
                     "message": "The application layer depends on ports: the platform kit is used by adapters (infrastructure, transport), and another module is reached through an adapter of a port in application/ports."
                   },
                   {

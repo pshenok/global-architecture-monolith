@@ -1,0 +1,330 @@
+{
+  "type": "base",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "291a0fae-749f-4d12-945a-f34ec1d5ab1e",
+  "prevIds": [
+    "00000000-0000-0000-0000-000000000000"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_schema",
+      "statementTarget": [
+        "schema",
+        "users"
+      ],
+      "writes": [
+        "s|sch|users",
+        "n|sch|users",
+        "e|sch|users"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "users",
+        "identities"
+      ],
+      "writes": [
+        "s|tbl|users.identities",
+        "n|tbl|users.identities",
+        "e|tbl|users.identities",
+        "n|rel|users.identities",
+        "n|type|users.identities",
+        "n|rel|users.identities_pkey"
+      ],
+      "reads": [
+        "n|sch|users"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "users",
+        "users"
+      ],
+      "writes": [
+        "s|tbl|users.users",
+        "n|tbl|users.users",
+        "e|tbl|users.users",
+        "n|rel|users.users",
+        "n|type|users.users",
+        "n|rel|users.users_pkey",
+        "n|rel|users.users_email_key"
+      ],
+      "reads": [
+        "n|sch|users"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "users",
+        "identities",
+        "identities_user_id_idx"
+      ],
+      "writes": [
+        "s|idx|users.identities_user_id_idx",
+        "n|idx|users.identities_user_id_idx",
+        "e|idx|users.identities_user_id_idx",
+        "n|rel|users.identities_user_id_idx"
+      ],
+      "reads": [
+        "n|tbl|users.identities",
+        "n|sch|users",
+        "n|col|users.identities.user_id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "users",
+        "identities"
+      ],
+      "writes": [
+        "s|fk|users.identities.identities_user_id_users_id_fkey",
+        "n|fk|users.identities.identities_user_id_users_id_fkey",
+        "e|fk|users.identities.identities_user_id_users_id_fkey",
+        "n|con|users.identities.identities_user_id_users_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|users.identities",
+        "n|sch|users",
+        "n|tbl|users.users",
+        "n|sch|users",
+        "n|col|users.identities.user_id",
+        "n|col|users.users.id",
+        "e|uniqueness|users.users.id"
+      ]
+    }
+  ],
+  "ddl": [
+    {
+      "name": "users",
+      "entityType": "schemas"
+    },
+    {
+      "schema": "users",
+      "name": "identities",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "users",
+      "name": "users",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "users",
+      "table": "identities",
+      "name": "issuer",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "users",
+      "table": "identities",
+      "name": "subject",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "users",
+      "table": "identities",
+      "name": "user_id",
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "users",
+      "table": "identities",
+      "name": "created_at",
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "users",
+      "table": "users",
+      "name": "id",
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "users",
+      "table": "users",
+      "name": "email",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "users",
+      "table": "users",
+      "name": "full_name",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "users",
+      "table": "users",
+      "name": "roles",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 1,
+      "default": "'{}'",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "users",
+      "table": "users",
+      "name": "created_at",
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "users",
+      "table": "users",
+      "name": "updated_at",
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "users",
+      "table": "identities",
+      "name": "identities_user_id_idx",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "users",
+      "table": "identities",
+      "name": "identities_user_id_users_id_fkey",
+      "nameExplicit": false,
+      "columns": [
+        "user_id"
+      ],
+      "schemaTo": "users",
+      "tableTo": "users",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "entityType": "fks"
+    },
+    {
+      "schema": "users",
+      "table": "identities",
+      "name": "identities_pkey",
+      "columns": [
+        "issuer",
+        "subject"
+      ],
+      "nameExplicit": true,
+      "entityType": "pks"
+    },
+    {
+      "schema": "users",
+      "table": "users",
+      "name": "users_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "users",
+      "table": "users",
+      "name": "users_email_key",
+      "nameExplicit": true,
+      "columns": [
+        "email"
+      ],
+      "nullsNotDistinct": false,
+      "entityType": "uniques"
+    },
+    {
+      "schema": "users",
+      "table": "users",
+      "name": "users_roles_check",
+      "value": "\"roles\" <@ ARRAY['admin']::text[]",
+      "entityType": "checks"
+    }
+  ]
+}

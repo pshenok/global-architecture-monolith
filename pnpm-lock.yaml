@@ -384,6 +384,108 @@ importers:
         specifier: 'catalog:'
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@26.6.5)(vite@8.3.5(@types/node@26.6.5)(yaml@2.9.1))
 
+  modules/bookings:
+    dependencies:
+      '@gam/houses':
+        specifier: workspace:*
+        version: link:../houses
+      '@gam/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@gam/platform':
+        specifier: workspace:*
+        version: link:../../packages/platform
+      '@gam/users':
+        specifier: workspace:*
+        version: link:../users
+      '@nestjs/common':
+        specifier: 'catalog:'
+        version: 12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0)
+      '@nestjs/swagger':
+        specifier: 'catalog:'
+        version: 12.0.2(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(@nestjs/core@12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(typescript@7.0.2)
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 1.0.0-rc.5(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(pg@8.23.1)(zod@4.6.7)
+      fastify:
+        specifier: 'catalog:'
+        version: 5.12.7
+      reflect-metadata:
+        specifier: 'catalog:'
+        version: 0.2.2
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.7
+    devDependencies:
+      drizzle-kit:
+        specifier: 'catalog:'
+        version: 1.0.0-rc.5(drizzle-orm@1.0.0-rc.5(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(pg@8.23.1)(zod@4.6.7))
+
+  modules/houses:
+    dependencies:
+      '@gam/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@gam/platform':
+        specifier: workspace:*
+        version: link:../../packages/platform
+      '@gam/users':
+        specifier: workspace:*
+        version: link:../users
+      '@nestjs/common':
+        specifier: 'catalog:'
+        version: 12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0)
+      '@nestjs/swagger':
+        specifier: 'catalog:'
+        version: 12.0.2(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(@nestjs/core@12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(typescript@7.0.2)
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 1.0.0-rc.5(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(pg@8.23.1)(zod@4.6.7)
+      fastify:
+        specifier: 'catalog:'
+        version: 5.12.7
+      reflect-metadata:
+        specifier: 'catalog:'
+        version: 0.2.2
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.7
+    devDependencies:
+      drizzle-kit:
+        specifier: 'catalog:'
+        version: 1.0.0-rc.5(drizzle-orm@1.0.0-rc.5(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(pg@8.23.1)(zod@4.6.7))
+
+  modules/users:
+    dependencies:
+      '@gam/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@gam/platform':
+        specifier: workspace:*
+        version: link:../../packages/platform
+      '@nestjs/common':
+        specifier: 'catalog:'
+        version: 12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0)
+      '@nestjs/swagger':
+        specifier: 'catalog:'
+        version: 12.0.2(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(@nestjs/core@12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(typescript@7.0.2)
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 1.0.0-rc.5(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(pg@8.23.1)(zod@4.6.7)
+      fastify:
+        specifier: 'catalog:'
+        version: 5.12.7
+      reflect-metadata:
+        specifier: 'catalog:'
+        version: 0.2.2
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.7
+    devDependencies:
+      drizzle-kit:
+        specifier: 'catalog:'
+        version: 1.0.0-rc.5(drizzle-orm@1.0.0-rc.5(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(pg@8.23.1)(zod@4.6.7))
+
   packages/kernel: {}
 
   packages/platform:
