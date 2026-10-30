@@ -95,8 +95,7 @@ pnpm events:status                                         # deliveries and dead
 ## Working with Claude Code
 
 Open the repo in Claude Code: `CLAUDE.md` and the `gam-*` skills load automatically.
-Start from the `gam-architecture` skill. To use the skills in another repository (you
-need read access to this GitHub repository):
+Start from the `gam-architecture` skill. To use the skills in another repository:
 
 ```text
 /plugin marketplace add pshenok/global-architecture-monolith

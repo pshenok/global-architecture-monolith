@@ -21,7 +21,7 @@ specification.
 ## Install
 
 Inside this repository the skills load automatically (`.claude/skills` links to them).
-To use them in another project (you need read access to this GitHub repository):
+To use them in another project:
 
 ```text
 /plugin marketplace add pshenok/global-architecture-monolith
