@@ -59,8 +59,11 @@ export async function createTestDatabase(options: {
   try {
     await runMigrations({ databaseUrl: url.toString(), sets: options.migrations, lockKey: name });
   } catch (error) {
-    // The caller gets no TestDatabase to dispose(), so clean up here.
-    await drop().catch(() => undefined);
+    // The caller gets no TestDatabase to dispose(), so clean up here. The migrator's
+    // sessions may still be closing: settle first, as dispose() does.
+    await settle()
+      .then(drop)
+      .catch(() => undefined);
     await admin.end();
     throw new Error(`migrations failed in test database ${name}: ${String(error)}`, {
       cause: error,
