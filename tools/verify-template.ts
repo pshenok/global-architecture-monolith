@@ -2,11 +2,12 @@
  * CI guard against template rot: generates a throwaway multi-word module from
  * templates/module, mounts it in the app, then lints (Biome, check-access,
  * check-boundaries), typechecks, tests and builds it and the app, and removes it,
- * restoring the files it touched from a snapshot taken first (local edits included).
+ * restoring the files it touched from a snapshot taken first (local edits included) and
+ * building the app again, so its dist matches the restored sources.
  *   pnpm template:verify   (needs Postgres: `pnpm db:setup`)
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, readRegistry } from './lib.ts';
 
@@ -56,6 +57,17 @@ try {
   rmSync(join(ROOT, 'modules', PLURAL), { recursive: true, force: true });
   for (const [file, text] of snapshot) writeFileSync(join(ROOT, file), text);
   run(['pnpm', 'install', '--prefer-offline', '--no-frozen-lockfile']);
+  // The app was built with the throwaway module mounted: build it again from the restored
+  // sources, or its dist (git-ignored, so the status check cannot see it) would import a
+  // package that no longer exists.
+  run(['pnpm', 'turbo', 'run', 'build', `--filter=${api.package}...`]);
+}
+const stale = readdirSync(join(ROOT, api.dir, 'dist'), { recursive: true, encoding: 'utf8' })
+  .filter((file) => file.endsWith('.js'))
+  .filter((file) => readFileSync(join(ROOT, api.dir, 'dist', file), 'utf8').includes(PACKAGE));
+if (stale.length > 0) {
+  console.error(`\ntemplate:verify left ${api.dir}/dist importing ${PACKAGE}: ${stale.join(', ')}`);
+  failed = true;
 }
 const after = status();
 if (after !== before) {

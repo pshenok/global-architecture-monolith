@@ -152,10 +152,12 @@ export class HouseEventsConsumer {
   (a `ServiceActor` named after the subscribing module). Never take an actor parameter
   (check-access refuses an actor in any parameter of a decorated method). `currentEvent()`
   gives `id`, `type`, `producer`, `aggregateId`, `occurredAt` and `attempt`.
-- **The handler and the acknowledgement commit together**: the dispatcher claims the
-  delivery, runs the handler and marks it delivered in one transaction, so its effect
+- **The handler and the acknowledgement commit together**: the dispatcher leases the
+  delivery, then runs the handler and marks it delivered in one transaction, so its effect
   happens once per subscriber and a failure leaves nothing behind. No `processed_events`
   table is needed.
+- **Finish within `EVENTS_HANDLER_TIMEOUT_MS`** (10 s): past it the delivery fails with
+  `HANDLER_TIMEOUT` and is retried (Postgres 17+ also ends its transaction).
 - **No calls to other modules** in a handler: they are refused inside the transaction.
   Take what you need from the payload, or react to another event.
 - **Order-independent and idempotent in effect**: filter by state ("cancel what is still
@@ -167,18 +169,23 @@ export class HouseEventsConsumer {
 
 ### Delivery semantics
 
-- The `EventDispatcher` polls `events.deliveries` every `EVENTS_POLL_MS` (500 ms) when idle,
-  takes up to `EVENTS_BATCH` (50) due rows per round, oldest first, each in its own
-  transaction (`FOR UPDATE SKIP LOCKED`, so replicas never take the same row). A handler
-  runs in a fresh request context with the publishing request's id and trace.
-- A failed handler rolls back; the attempt is counted outside it. Transient failures
+- The `EventDispatcher` polls `events.deliveries` every `EVENTS_POLL_MS` (500 ms) when idle
+  and takes up to `EVENTS_BATCH` (50) due rows per round, oldest first, only of the
+  (subscriber, type) pairs this build handles. Each is first **leased** in a committed
+  statement (`FOR UPDATE SKIP LOCKED`, so replicas never take the same row): its attempt
+  is counted and it is out of reach for twice `EVENTS_HANDLER_TIMEOUT_MS` plus 5 s. Then
+  one transaction locks it again, runs the handler in a fresh request context with the
+  publishing request's id and trace, and marks it delivered. If the process dies
+  mid-handler, the row is due again when the lease runs out, its attempt already counted.
+- A failed handler rolls back; its attempt was counted before it ran. Transient failures
   (`ConcurrencyError`, `DependencyUnavailableError`, `RateLimitedError`, database
   conflicts and timeouts) and unknown errors (`HANDLER_FAILED`) retry after 1 s, doubling
   to at most 5 min (`retryDelayMs`). A delivery becomes a **dead letter** after
   `MAX_ATTEMPTS` (10), or at once for a failure that cannot go away: any other
-  `DomainError`, `CROSS_MODULE_CALL_IN_TRANSACTION`, `EVENT_TYPE_NOT_HANDLED` (no handler
-  any more), `EVENT_PAYLOAD_INVALID` (the payload no longer matches the schema) or
-  `UNEXPECTED_PRODUCER`.
+  `DomainError`, `CROSS_MODULE_CALL_IN_TRANSACTION`, `EVENT_PAYLOAD_INVALID` (the payload
+  no longer matches the schema) or `UNEXPECTED_PRODUCER`. Attempts that never settled
+  (the process died) count: a lease past the last one is a dead letter with
+  `ATTEMPTS_EXHAUSTED`. `HANDLER_TIMEOUT` retries like an outage.
 - The app logs `will retry <subscriber> <type> <eventId> (attempt n): <reason>: <message>`
   (warn) and `dead letter: ...` (error); the delivery keeps `<reason>: <message>` as
   `last_error`.
@@ -190,9 +197,9 @@ export class HouseEventsConsumer {
 
 ```bash
 pnpm events:status                                                     # per (subscriber, type): pending, due, dead, delivered, oldest, last error, handled
-pnpm events:redrive --subscriber bookings --type houses.v1.HouseDeletedEvent      # dead letters due again, attempts reset
+pnpm events:redrive --subscriber bookings --type houses.v1.HouseDeletedEvent      # dead letters due again, attempts reset (handled pairs only)
 pnpm events:replay --subscriber houses --type users.v1.UserDeletedEvent --since 2026-10-01T00:00:00Z   # deliver again (or for the first time)
-pnpm events:drop --subscriber <module> --type <type>                   # discard the pair's dead letters
+pnpm events:drop --subscriber <module> --type <type>                   # discard the pair's dead letters (and pending ones once it is not handled)
 ```
 
 Details, output and troubleshooting: `gam-local-stack`.
@@ -202,8 +209,11 @@ Details, output and troubleshooting: `gam-local-stack`.
 - **A new type**: deploy the producer and the consumers together (one app); nothing to
   register elsewhere.
 - **Retiring a handler or a type** (a v1 every subscriber replaced with v2): remove the
-  handler; deliveries still pending for it dead-letter with `EVENT_TYPE_NOT_HANDLED`, and
-  `events:status` shows the pair as not handled; `events:drop` them. Then the producer
-  stops publishing the old type.
+  handler; the dispatcher no longer leases the pair's deliveries, so they stay pending,
+  and `events:status` shows the pair as not handled. Once the build without the handler
+  runs everywhere, `events:drop` the pair (it discards pending deliveries of a pair no
+  module handles, not only dead letters). Then the producer stops publishing the old type.
+- **Rolling deploys**: a replica of the old build leases only pairs it handles, so the
+  deliveries of a subscription the new build added wait for the new replicas.
 - **No health checks** for events: a stuck delivery never takes the API out of rotation;
   lag shows in `events:status` and in the logs.

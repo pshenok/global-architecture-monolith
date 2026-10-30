@@ -1,3 +1,4 @@
+import { DependencyUnavailableError } from '@gam/kernel';
 import {
   Inject,
   Injectable,
@@ -10,7 +11,7 @@ import { DiscoveryService, MetadataScanner, ModuleRef } from '@nestjs/core';
 import { TransactionHost } from '@nestjs-cls/transactional';
 import type { TransactionalAdapterDrizzleOrm } from '@nestjs-cls/transactional-adapter-drizzle-orm';
 import { context, propagation, ROOT_CONTEXT } from '@opentelemetry/api';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, type SQL, sql } from 'drizzle-orm';
 import { CLS_ID, ClsService } from 'nestjs-cls';
 import { enterEventDelivery } from '../auth/actor-context.ts';
 import { CONFIG } from '../config/config.ts';
@@ -28,8 +29,20 @@ export const RETENTION_DAYS = 21;
 export const DELIVERED_KEPT_DAYS = 7;
 const PURGE_EVERY_MS = 60 * 60_000;
 
-/** What became of one claimed delivery. */
-export type DeliveryOutcome = 'none' | 'delivered' | 'retry' | 'dead';
+/**
+ * What became of one claimed delivery. `lost`: its lease ended before the delivery could
+ * start (another replica may hold it now).
+ */
+export type DeliveryOutcome = 'none' | 'delivered' | 'retry' | 'dead' | 'lost';
+
+/** A delivery leased by this replica: its attempt is already counted and committed. */
+interface Lease extends Record<string, unknown> {
+  subscriber: string;
+  event_id: string;
+  type: string;
+  /** The attempt this lease is (counted when it was leased). */
+  attempts: number;
+}
 
 interface ClaimedRow extends Record<string, unknown> {
   subscriber: string;
@@ -43,6 +56,13 @@ interface ClaimedRow extends Record<string, unknown> {
   request_id: string | null;
   traceparent: string | null;
 }
+
+/** The handler did not settle within EVENTS_HANDLER_TIMEOUT_MS: retried like an outage. */
+const handlerTimedOut = (ms: number) =>
+  new DependencyUnavailableError(
+    'HANDLER_TIMEOUT',
+    `the handler did not finish within EVENTS_HANDLER_TIMEOUT_MS (${ms} ms)`,
+  );
 
 /** A delivery that cannot succeed however often it is tried. */
 class Undeliverable extends Error {
@@ -77,13 +97,17 @@ export async function drain(
 /**
  * Delivers events to the modules that subscribe to them (ADR-0005), in this process.
  *
- * Each delivery runs in its own transaction: it claims the due row (FOR UPDATE SKIP
- * LOCKED, so replicas never take the same one), calls the module's @OnEvent handler in a
- * fresh request context that acts as the module itself (currentService(),
- * currentEvent()), and marks the row delivered. The handler's writes and the mark commit
- * together, so an event takes effect once per subscriber; a crash rolls both back and
- * the row is due again. A failed handler is retried with backoff (1 s doubling to 5 min)
- * or, when it cannot succeed, after MAX_ATTEMPTS, kept as a dead letter.
+ * A delivery is first leased in a statement of its own that commits at once: the due row
+ * of a (subscriber, type) pair this app handles is taken with FOR UPDATE SKIP LOCKED (so
+ * replicas never take the same one), its attempt is counted and it is put out of reach
+ * for the lease. Then one transaction locks the row again, calls the module's @OnEvent
+ * handler in a fresh request context that acts as the module itself (currentService(),
+ * currentEvent()), and marks the row delivered: the handler's writes and the mark commit
+ * together, so an event takes effect once per subscriber. A handler gets
+ * EVENTS_HANDLER_TIMEOUT_MS (enforced by Postgres' transaction_timeout too, from version
+ * 17). A failed handler is retried with backoff (1 s doubling, at most 5 min) or, when it
+ * cannot succeed, kept as a dead letter; so is a delivery that used up MAX_ATTEMPTS,
+ * including attempts that never settled because the process died (the lease ran out).
  */
 @Injectable()
 export class EventDispatcher implements OnApplicationBootstrap, OnModuleDestroy {
@@ -93,6 +117,8 @@ export class EventDispatcher implements OnApplicationBootstrap, OnModuleDestroy 
   private inFlight: Promise<void> | undefined;
   private stopped = false;
   private failures = 0;
+  /** Postgres 17+ can end a transaction that outlives the handler's deadline. */
+  private transactionTimeout = false;
 
   constructor(
     private readonly registry: EventRegistry,
@@ -105,9 +131,15 @@ export class EventDispatcher implements OnApplicationBootstrap, OnModuleDestroy 
   ) {}
 
   /** Resolves the handlers; fails boot on an @OnEvent provider that no feature lists. */
-  onApplicationBootstrap(): void {
+  async onApplicationBootstrap(): Promise<void> {
     this.assertEveryHandlerListed();
     this.registry.seal(this.moduleRef);
+    if (this.registry.subscriptions().length > 0) {
+      const version = await this.db.tx.execute<{ server_version_num: string }>(
+        sql`show server_version_num`,
+      );
+      this.transactionTimeout = Number(version.rows[0]?.server_version_num ?? 0) >= 170_000;
+    }
     if (!this.config.EVENTS_AUTOSTART) return;
     if (this.registry.subscriptions().length > 0) this.schedule(0);
     this.purgeTimer = setInterval(() => {
@@ -123,7 +155,9 @@ export class EventDispatcher implements OnApplicationBootstrap, OnModuleDestroy 
     clearTimeout(this.timer);
     clearInterval(this.purgeTimer);
     await drain(this.inFlight, this.config.EVENTS_DRAIN_MS, () =>
-      this.logger.warn('stopped with a delivery in flight; it rolls back and is due again'),
+      this.logger.warn(
+        'stopped with a delivery in flight; it rolls back and is due again after its lease',
+      ),
     );
   }
 
@@ -138,54 +172,105 @@ export class EventDispatcher implements OnApplicationBootstrap, OnModuleDestroy 
   }
 
   /**
-   * Claims one due delivery (the oldest, or exactly `only`) and processes it. Never throws
-   * for a handler failure; throws when the database cannot be reached.
+   * Leases one due delivery (the oldest of the pairs this app handles, or exactly `only`,
+   * handled or not) and processes it. Never throws for a handler failure; throws when the
+   * database cannot be reached.
    */
   deliverNext(only?: {
     readonly subscriber: string;
     readonly eventId: string;
   }): Promise<DeliveryOutcome> {
     return this.cls.run({ ifNested: 'override' }, async () => {
-      let claimed: ClaimedRow | undefined;
+      const lease = await this.lease(only);
+      if (!lease) return 'none';
+      if (lease.attempts > MAX_ATTEMPTS) return this.giveUp(lease);
+      let timedOut: Error | undefined;
       try {
         return await this.host.withTransaction(async () => {
-          claimed = await this.claim(only);
-          if (!claimed) return 'none' as const;
-          await this.handle(claimed);
+          const row = await this.relock(lease);
+          if (!row) return 'lost' as const;
+          if (this.transactionTimeout) {
+            const timeout = `${this.config.EVENTS_HANDLER_TIMEOUT_MS}ms`;
+            await this.db.tx.execute(
+              sql`select set_config('transaction_timeout', ${timeout}, true)`,
+            );
+          }
+          await this.withDeadline(this.handle(row), (error) => {
+            timedOut = error;
+          });
           await this.db.tx
             .update(deliveries)
-            .set({
-              status: 'delivered',
-              attempts: claimed.attempts + 1,
-              deliveredAt: sql`now()`,
-              lastError: null,
-            })
-            .where(this.keyOf(claimed));
+            .set({ status: 'delivered', deliveredAt: sql`now()`, lastError: null })
+            .where(this.leaseOf(lease));
           return 'delivered' as const;
         });
       } catch (error) {
-        if (!claimed) throw error;
-        return this.recordFailure(claimed, error);
+        // After a deadline the rollback itself may fail (Postgres ended the session):
+        // the deadline is what happened.
+        return this.recordFailure(lease, timedOut ?? error);
       }
     });
   }
 
-  private async claim(
+  /** Counts the next attempt of a due delivery and puts it out of reach, in one committed statement. */
+  private async lease(
     only: { readonly subscriber: string; readonly eventId: string } | undefined,
-  ): Promise<ClaimedRow | undefined> {
-    const which = only
-      ? sql`d.subscriber = ${only.subscriber} and d.event_id = ${only.eventId}`
-      : sql`true`;
+  ): Promise<Lease | undefined> {
+    let which: SQL;
+    if (only) {
+      which = sql`subscriber = ${only.subscriber} and event_id = ${only.eventId}`;
+    } else {
+      // Only pairs this app handles: during a rolling deploy, a replica of the previous
+      // version leaves the deliveries of a subscription it does not know yet to the new one.
+      const pairs = this.registry.subscriptions().map((s) => sql`(${s.module}, ${s.event.type})`);
+      if (pairs.length === 0) return undefined;
+      which = sql`(subscriber, type) in (${sql.join(pairs, sql`, `)})`;
+    }
+    const leaseSeconds = (this.config.EVENTS_HANDLER_TIMEOUT_MS * 2 + 5_000) / 1000;
+    const result = await this.db.tx.execute<Lease>(sql`
+      update events.deliveries d
+      set attempts = d.attempts + 1,
+          available_at = now() + make_interval(secs => ${leaseSeconds})
+      from (
+        select subscriber, event_id from events.deliveries
+        where status = 'pending' and available_at <= now() and ${which}
+        order by available_at, event_id
+        limit 1
+        for update skip locked
+      ) due
+      where d.subscriber = due.subscriber and d.event_id = due.event_id
+      returning d.subscriber, d.event_id, d.type, d.attempts`);
+    return result.rows[0];
+  }
+
+  /** Locks a leased delivery for its transaction; undefined when the lease was lost. */
+  private async relock(lease: Lease): Promise<ClaimedRow | undefined> {
     const result = await this.db.tx.execute<ClaimedRow>(sql`
       select d.subscriber, d.event_id, d.attempts, e.type, e.producer, e.aggregate_id,
              e.occurred_at, e.payload, e.request_id, e.traceparent
       from events.deliveries d join events.events e on e.id = d.event_id
-      where d.status = 'pending' and d.available_at <= now() and ${which}
-      order by d.available_at, d.event_id
-      limit 1
+      where d.subscriber = ${lease.subscriber} and d.event_id = ${lease.event_id}
+        and d.status = 'pending' and d.attempts = ${lease.attempts}
       for update of d skip locked`);
     const row = result.rows[0];
     return row ? { ...row, occurred_at: new Date(row.occurred_at) } : undefined;
+  }
+
+  /** Rejects when `work` outlives the handler's deadline; `work` itself may never settle. */
+  private withDeadline(work: Promise<void>, onTimeout: (error: Error) => void): Promise<void> {
+    // Just past transaction_timeout, so Postgres ends a busy transaction first.
+    const ms = this.config.EVENTS_HANDLER_TIMEOUT_MS + 1_000;
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        const error = handlerTimedOut(this.config.EVENTS_HANDLER_TIMEOUT_MS);
+        onTimeout(error);
+        reject(error);
+      }, ms);
+    });
+    // A handler that settles after its deadline must not become an unhandled rejection.
+    work.catch(() => undefined);
+    return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
   }
 
   /** Runs the module's handler as the module itself, in the claim's transaction. */
@@ -197,7 +282,7 @@ export class EventDispatcher implements OnApplicationBootstrap, OnModuleDestroy 
       producer: row.producer,
       aggregateId: row.aggregate_id,
       occurredAt: row.occurred_at,
-      attempt: row.attempts + 1,
+      attempt: row.attempts,
     });
     const handler = this.registry.handlerOf(row.subscriber, row.type);
     if (!handler) {
@@ -219,31 +304,48 @@ export class EventDispatcher implements OnApplicationBootstrap, OnModuleDestroy 
     return context.with(trace, () => handler.invoke(payload.data));
   }
 
-  /** Outside the rolled-back transaction: count the attempt, then retry later or give up. */
-  private async recordFailure(row: ClaimedRow, error: unknown): Promise<DeliveryOutcome> {
+  /** Outside the rolled-back transaction: retry later (after a backoff) or give up. */
+  private async recordFailure(lease: Lease, error: unknown): Promise<DeliveryOutcome> {
     const failure =
       error instanceof Undeliverable
         ? { action: 'dead' as const, reason: error.reason, message: error.message }
         : classifyFailure(error);
-    const attempts = row.attempts + 1;
-    const dead = failure.action === 'dead' || attempts >= MAX_ATTEMPTS;
-    const what = `${row.subscriber} ${row.type} ${row.event_id} (attempt ${attempts})`;
+    const dead = failure.action === 'dead' || lease.attempts >= MAX_ATTEMPTS;
+    const what = `${lease.subscriber} ${lease.type} ${lease.event_id} (attempt ${lease.attempts})`;
     if (dead) this.logger.error(`dead letter: ${what}: ${failure.reason}: ${failure.message}`);
     else this.logger.warn(`will retry ${what}: ${failure.reason}: ${failure.message}`);
     await this.db.tx
       .update(deliveries)
       .set({
         status: dead ? 'dead' : 'pending',
-        attempts,
-        availableAt: sql`now() + make_interval(secs => ${retryDelayMs(attempts) / 1000})`,
+        availableAt: sql`now() + make_interval(secs => ${retryDelayMs(lease.attempts) / 1000})`,
         lastError: `${failure.reason}: ${failure.message}`.slice(0, 1000),
       })
-      .where(and(this.keyOf(row), eq(deliveries.status, 'pending')));
+      .where(this.leaseOf(lease));
     return dead ? 'dead' : 'retry';
   }
 
-  private keyOf(row: ClaimedRow) {
-    return and(eq(deliveries.subscriber, row.subscriber), eq(deliveries.eventId, row.event_id));
+  /** A delivery whose earlier attempts never settled (the process died) and that has none left. */
+  private async giveUp(lease: Lease): Promise<DeliveryOutcome> {
+    const message = `${MAX_ATTEMPTS} attempts did not settle (the process stopped during them, or their lease ran out)`;
+    this.logger.error(
+      `dead letter: ${lease.subscriber} ${lease.type} ${lease.event_id}: ATTEMPTS_EXHAUSTED: ${message}`,
+    );
+    await this.db.tx
+      .update(deliveries)
+      .set({ status: 'dead', lastError: `ATTEMPTS_EXHAUSTED: ${message}` })
+      .where(this.leaseOf(lease));
+    return 'dead';
+  }
+
+  /** The leased row, as long as no other lease replaced this one. */
+  private leaseOf(lease: Lease) {
+    return and(
+      eq(deliveries.subscriber, lease.subscriber),
+      eq(deliveries.eventId, lease.event_id),
+      eq(deliveries.status, 'pending'),
+      eq(deliveries.attempts, lease.attempts),
+    );
   }
 
   /** Forgets delivered rows after DELIVERED_KEPT_DAYS and finished events after RETENTION_DAYS. */

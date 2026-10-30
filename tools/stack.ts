@@ -30,7 +30,7 @@ async function waitUntilReady(): Promise<boolean> {
   const { api } = readRegistry();
   const base = `https://localhost:${api.httpsPort}`;
   const dispatcher = new Agent({
-    connect: { ca: readFileSync(join(ROOT, '.certs/dev-cert.pem')) },
+    connect: { ca: readFileSync(join(ROOT, '.certs/dev-ca.pem')) },
   });
   const deadline = Date.now() + 60_000;
   let last = 'no response';

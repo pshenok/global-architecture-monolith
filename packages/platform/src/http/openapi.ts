@@ -1,42 +1,66 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { DocumentBuilder, type OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
+import { z } from 'zod';
 import { PUBLIC_EXTENSION } from '../auth/access.ts';
+import { ProblemDetails } from './problem-details.ts';
 
 const METHODS = ['get', 'put', 'post', 'delete', 'patch'] as const;
+const PROBLEM_REF = '#/components/schemas/ProblemDetails';
+/** How every error response is documented: the problem details the filter sends. */
+const PROBLEM_CONTENT = { 'application/problem+json': { schema: { $ref: PROBLEM_REF } } };
 
+type Response = { description?: string; content?: Record<string, { schema?: unknown }> };
 type Operation = {
   security?: unknown[];
-  responses?: Record<string, { description?: string; content?: unknown }>;
+  responses?: Record<string, Response>;
   [PUBLIC_EXTENSION]?: boolean;
 };
 
+const isProblem = (response: Response) =>
+  Object.values(response.content ?? {}).some(
+    (media) => (media.schema as { $ref?: unknown } | undefined)?.$ref === PROBLEM_REF,
+  );
+
 /**
  * Every operation needs a bearer token (global security requirement) except the ones
- * marked @Access.public, which get `security: []`. Secured operations document 401 and 403
- * with the same problem+json body as their other errors.
+ * marked @Access.public, which get `security: []`. Secured operations document 401 and 403;
+ * every error response, those included, is application/problem+json with the
+ * ProblemDetails schema, as ProblemDetailsFilter sends it.
  */
 export function applySecurity(document: OpenAPIObject): OpenAPIObject {
+  document.components ??= {};
+  document.components.schemas ??= {};
+  if (!document.components.schemas.ProblemDetails) {
+    // Its .meta id makes Zod emit it under definitions.
+    const generated = z.toJSONSchema(ProblemDetails, { target: 'openapi-3.0' }) as {
+      definitions?: Record<string, unknown>;
+    };
+    document.components.schemas.ProblemDetails = (generated.definitions?.ProblemDetails ??
+      generated) as never;
+  }
   for (const item of Object.values(document.paths)) {
     for (const method of METHODS) {
       const operation = (item as Record<string, Operation | undefined>)[method];
       if (!operation) continue;
+      operation.responses ??= {};
+      const responses = operation.responses;
       if (operation[PUBLIC_EXTENSION]) {
         delete operation[PUBLIC_EXTENSION];
         operation.security = [];
-        continue;
+      } else {
+        responses['401'] ??= {
+          description: 'Missing, invalid or expired bearer token (AUTH_TOKEN_*)',
+        };
+        responses['403'] ??= {
+          description: 'Not allowed, or the login has no user yet (USER_NOT_REGISTERED)',
+        };
       }
-      operation.responses ??= {};
-      const responses = operation.responses;
-      const problem = Object.values(responses).find((response) => response.content)?.content;
-      responses['401'] ??= {
-        description: 'Missing, invalid or expired bearer token (AUTH_TOKEN_*)',
-        ...(problem ? { content: problem } : {}),
-      };
-      responses['403'] ??= {
-        description: 'Not allowed, or the login has no user yet (USER_NOT_REGISTERED)',
-        ...(problem ? { content: problem } : {}),
-      };
+      for (const [status, response] of Object.entries(responses)) {
+        if (Number(status) >= 400 && (!response.content || isProblem(response))) {
+          response.content = structuredClone(PROBLEM_CONTENT);
+        }
+      }
     }
   }
   return document;

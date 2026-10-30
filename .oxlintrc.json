@@ -13,7 +13,7 @@
     "restriction": "off",
     "nursery": "off"
   },
-  "ignorePatterns": ["**/dist/**", "**/coverage/**", "**/drizzle/**"],
+  "ignorePatterns": ["**/dist/**", "**/coverage/**"],
   "rules": {
     "typescript/no-floating-promises": "error",
     "typescript/no-misused-promises": "error",

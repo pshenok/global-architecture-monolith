@@ -33,6 +33,9 @@ describe('bookings over HTTP', () => {
     api = await createTestApp({
       database: db,
       modules: [BookingsModule],
+      // The concurrent-cancel test queues six requests on a row lock: under a busy machine
+      // (every package's tests at once) that can take longer than the default 1.5 s.
+      env: { DB_STATEMENT_TIMEOUT_MS: '10000' },
       overrides: new Map<InjectionToken, unknown>([
         [UserDirectory, new FakeUserDirectory(new Set([GUEST_ID, HOST_ID, STRANGER_ID]))],
         [HouseCatalog, new FakeHouseCatalog()],

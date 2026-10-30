@@ -33,6 +33,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "drizzle-kit": "catalog:"
+    "drizzle-kit": "catalog:",
+    "nestjs-cls": "catalog:"
   }
 }

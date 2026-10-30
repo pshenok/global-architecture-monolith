@@ -24,6 +24,7 @@ import { EventsCoreModule } from '../events/events.module.ts';
 import { HealthController } from '../http/health.controller.ts';
 import { loggerParams } from '../logging/logger-params.ts';
 import { SystemClock, UuidV7IdGenerator } from './core-providers.ts';
+import { ModuleApiCheck } from './module-api.check.ts';
 import { APP_NAME } from './tokens.ts';
 
 /** Where the IdentityResolver comes from: the module that owns users, or a test double. */
@@ -72,6 +73,7 @@ export class PlatformModule {
       DbContext,
       { provide: UnitOfWork, useClass: DrizzleUnitOfWork },
       resolver,
+      ModuleApiCheck,
       // Order matters: rate limiting runs before any token cryptography.
       { provide: APP_GUARD, useClass: ThrottlerGuard },
       { provide: APP_GUARD, useClass: AuthGuard },

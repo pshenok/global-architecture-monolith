@@ -1,18 +1,20 @@
 # Security-sensitive paths (ADR-0004): changes need the platform owner's review.
 # Guardrail code, the platform kit (the only code that may touch the raw HTTP server, mint
-# actors or read access metadata), the module boundaries, and everything that decides
-# whether and how the guardrails run.
+# actors or read access metadata) and the tests that pin its security behaviour, the module
+# boundaries, and everything that decides whether and how the guardrails run.
 /.github/CODEOWNERS @pshenok
 /.github/workflows/ @pshenok
 /security/ @pshenok
 /packages/platform/src/ @pshenok
 /packages/platform/drizzle/ @pshenok
+/packages/platform/test/ @pshenok
 /packages/kernel/src/actor.ts @pshenok
 /packages/kernel/src/testing.ts @pshenok
 /packages/kernel/src/index.ts @pshenok
 /apps/api/src/app.module.ts @pshenok
 /apps/api/src/main.ts @pshenok
 /apps/api/test/access-probes/ @pshenok
+/apps/api/test/app.spec.ts @pshenok
 /modules/houses/test/access-probes/ @pshenok
 /modules/houses/test/boundary-probes/ @pshenok
 /modules.json @pshenok

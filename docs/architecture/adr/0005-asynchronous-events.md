@@ -40,20 +40,31 @@ subscriber can apply an event and acknowledge it in one transaction.
    collects them at boot; a provider with `@OnEvent` handlers that no feature lists fails
    boot. The same features form a process-wide catalog the operator CLI reads without
    starting the app.
-4. **Delivery: one transaction per delivery, effectively once.** The `EventDispatcher`
-   polls `events.deliveries` (`EVENTS_POLL_MS`, 500 ms; `EVENTS_BATCH` per round) and, for
-   each due row, in one transaction: claims it (`FOR UPDATE SKIP LOCKED`, so replicas never
-   take the same row), runs the subscriber's handler in a fresh request context that acts
-   as the module itself (`currentService()`, `currentEvent()`, the publishing request's id
-   and trace), and marks the row delivered. The handler's writes and the acknowledgement
-   commit together, so an event takes effect once per subscriber; a crash rolls both back
-   and the row is due again. No `processed_events` table is needed.
-5. **Failures.** A failed handler's transaction rolls back; the dispatcher then counts the
-   attempt and either retries with backoff (1 s doubling to 5 min) or, when the failure
-   cannot go away (a non-transient DomainError, a payload that no longer validates, no
-   handler, a call to another module inside the transaction) or after `MAX_ATTEMPTS` (10),
-   keeps the row as a dead letter. Transient errors (ABORTED, UNAVAILABLE,
-   RESOURCE_EXHAUSTED, database conflicts and timeouts) and unknown ones retry.
+4. **Delivery: a lease, then one transaction per delivery, effectively once.** The
+   `EventDispatcher` polls `events.deliveries` (`EVENTS_POLL_MS`, 500 ms; `EVENTS_BATCH`
+   per round). It first leases the oldest due row of a (subscriber, type) pair this
+   version of the app handles, in a statement of its own that commits at once: the row is
+   taken with `FOR UPDATE SKIP LOCKED` (so replicas never take the same one), its attempt
+   is counted, and it is out of reach for the lease (twice `EVENTS_HANDLER_TIMEOUT_MS`
+   plus 5 s). Then one transaction locks the row again (only while the lease is still
+   this one), runs the subscriber's handler in a fresh request context that acts as the
+   module itself (`currentService()`, `currentEvent()`, the publishing request's id and
+   trace), and marks the row delivered. The handler's writes and the acknowledgement
+   commit together, so an event takes effect once per subscriber. A crash rolls both back
+   and the row is due again when its lease runs out, with the attempt already counted, so
+   an event that kills the process still ends as a dead letter instead of looping. No
+   `processed_events` table is needed.
+5. **Failures.** A failed handler's transaction rolls back; the dispatcher then either
+   retries with backoff (1 s doubling, at most 5 min) or, when the failure cannot go away
+   (a non-transient DomainError, a payload that no longer validates, no handler, a call to
+   another module inside the transaction) or after `MAX_ATTEMPTS` (10), keeps the row as a
+   dead letter. Attempts that never settled count too: a lease past the last attempt
+   becomes a dead letter with `ATTEMPTS_EXHAUSTED`. Transient errors (ABORTED,
+   UNAVAILABLE, RESOURCE_EXHAUSTED, database conflicts and timeouts) and unknown ones
+   retry. A handler gets `EVENTS_HANDLER_TIMEOUT_MS` (10 s): past it the delivery fails
+   with `HANDLER_TIMEOUT` and is retried, and on Postgres 17 or later
+   `transaction_timeout` ends the transaction itself, so a hung handler never holds the
+   dispatcher or its row.
 6. **Handlers** live in `src/transport/events/`, call one use case with
    `currentService()` (cleanup use cases take a `ServiceActor`, so no request can reach
    them), call no other module (`@ModuleApi` refuses inside the transaction), must not
@@ -101,11 +112,12 @@ history. A deleted host's stays are cancelled through its houses' events.
 ## Consequences
 
 - Reactions are eventually consistent: on the local stack they land within a second.
-- A handler holds its row lock and a transaction for its duration; handlers do database
-  work only (`DB_STATEMENT_TIMEOUT_MS` per statement, idle-in-transaction timeout twice
-  that).
-- During a rolling deploy, an instance of the old version publishes without a subscriber
-  the new version added; `events:replay` delivers those events to it.
+- A handler holds its row lock and a transaction for its duration, at most
+  `EVENTS_HANDLER_TIMEOUT_MS`; handlers do database work only (`DB_STATEMENT_TIMEOUT_MS`
+  per statement, idle-in-transaction timeout twice that).
+- During a rolling deploy, a replica of the old version leaves the deliveries of a
+  subscription it does not know pending for the new version, and publishes without a
+  subscriber the new version added; `events:replay` delivers those events to it.
 - A house or booking created between its existence check and the cleanup can stay
   orphaned (late writes). Tombstones checked on create are the follow-up if this matters.
 - No ordering guarantee: handlers must be order-independent.

@@ -50,15 +50,24 @@ interface Pkg {
   readonly dependencies: ReadonlySet<string>;
 }
 
-const SKIP_DIRS = new Set(['node_modules', 'dist', '.turbo', 'coverage', 'drizzle']);
+/** Skipped wherever they are. */
+const SKIP_DIRS = new Set(['node_modules', '.turbo']);
+/**
+ * Skipped only at a package's root (`<top>/<package>/<name>`): its build output and
+ * migrations. A folder with one of these names inside src/ is code, and is checked.
+ */
+const SKIP_AT_PACKAGE_ROOT = new Set(['dist', 'coverage', 'drizzle']);
+const skipped = (path: string, name: string) =>
+  SKIP_DIRS.has(name) ||
+  (SKIP_AT_PACKAGE_ROOT.has(name) && relative(ROOT, path).split(sep).length === 3);
 const registry = readRegistry();
 const problems: string[] = [];
 
 function* files(dir: string): Generator<string> {
   if (!existsSync(dir)) return;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (SKIP_DIRS.has(entry.name)) continue;
     const path = join(dir, entry.name);
+    if (skipped(path, entry.name)) continue;
     if (entry.isDirectory()) yield* files(path);
     else if (entry.name.endsWith('.ts')) yield path;
   }
@@ -249,12 +258,18 @@ function checkFile(file: string, source: SourceFile, as = file): void {
       problems.push(`${at(node)}: a shared package imports the module ${name}`);
     }
   }
+  if (!/\/src\//.test(as)) return;
+  checkTables(source, as, owner, at);
   if (owner.kind !== 'module' && owner.kind !== 'template') return;
   const own = registry.modules.find((m) => m.dir === owner.dir)?.schema ?? 'sample_items';
   const foreign = foreignSchemas(own);
-  // An SQL reference is `schema.table` or `"schema"."table"` after a space, a parenthesis
-  // or a comma; `houses.v1.` is an event type, `user-events.ts` a file name.
-  const reference = new RegExp(`(?:^|[\\s(,])"?(${foreign.join('|')})"?\\."?(?!v\\d+\\.)[a-z_]`);
+  // An SQL reference is `schema.table` or `"schema"."table"` (any case, a space before the
+  // dot allowed) after a space, a parenthesis or a comma; `houses.v1.` is an event type,
+  // `user-events.ts` a file name. Dynamic SQL is left to review.
+  const reference = new RegExp(
+    `(?:^|[\\s(,])"?(${foreign.join('|')})"?\\s*\\.(?:\\s*")?(?!v\\d+\\.)[a-z_]`,
+    'i',
+  );
   const visit = (node: Node): void => {
     if (
       node.kind === SyntaxKind.StringLiteral ||
@@ -272,7 +287,49 @@ function checkFile(file: string, source: SourceFile, as = file): void {
     }
     node.forEachChild(visit);
   };
-  if (/\/src\//.test(as)) source.forEachChild(visit);
+  source.forEachChild(visit);
+}
+
+/**
+ * Drizzle tables: `pgSchema(...)` only in a module's schema.ts, with its own schema (the
+ * platform's events tables in packages/platform/src/events/tables.ts), and no `pgTable`
+ * (the public schema) anywhere, under any import name.
+ */
+function checkTables(source: SourceFile, as: string, owner: Pkg, at: (node: Node) => string): void {
+  const own =
+    owner.kind === 'package'
+      ? as === 'packages/platform/src/events/tables.ts'
+        ? 'events'
+        : undefined
+      : as === `${owner.dir}/src/infrastructure/persistence/schema.ts`
+        ? (registry.modules.find((m) => m.dir === owner.dir)?.schema ?? 'sample_items')
+        : undefined;
+  const visit = (node: Node): void => {
+    if (node.kind === SyntaxKind.ImportSpecifier) {
+      const specifier = node as unknown as { propertyName?: Node; name: Node };
+      const imported = (specifier.propertyName ?? specifier.name).getText();
+      if (specifier.propertyName && /^pg(?:Schema|Table)$/.test(imported)) {
+        problems.push(`${at(node)}: renames ${imported} on import; use its own name`);
+      }
+    } else if (node.kind === SyntaxKind.CallExpression) {
+      const call = node as CallExpression;
+      const callee = /(?:^|\.)(pgSchema|pgTable)$/.exec(call.expression.getText());
+      if (callee?.[1] === 'pgTable') {
+        problems.push(
+          `${at(node)}: pgTable puts a table in the public schema; use the module's pgSchema`,
+        );
+      } else if (callee) {
+        const schema = textOf(call.arguments[0]);
+        if (own === undefined || schema !== own) {
+          problems.push(
+            `${at(node)}: declares pgSchema(${schema === undefined ? '...' : `'${schema}'`}) here; a module's tables are declared in its schema.ts, in its own schema only`,
+          );
+        }
+      }
+    }
+    node.forEachChild(visit);
+  };
+  source.forEachChild(visit);
 }
 
 function checkSchemaFiles(): void {
@@ -367,7 +424,15 @@ function selfTest(read: (path: string) => SourceFile | undefined): void {
   ) {
     problems.push('check-boundaries self-test: a cycle is not found');
   }
-  for (const path of files(join(ROOT, PROBES.dir))) {
+  const walked = new Set(files(join(ROOT, PROBES.dir)));
+  for (const file of readdirSync(join(ROOT, PROBES.dir), { recursive: true, encoding: 'utf8' })) {
+    if (file.endsWith('.ts') && !walked.has(join(ROOT, PROBES.dir, file))) {
+      problems.push(
+        `check-boundaries self-test: the source walker skips ${join(PROBES.dir, file)}`,
+      );
+    }
+  }
+  for (const path of walked) {
     const shown = relative(ROOT, path);
     const source = read(path);
     if (!source) {

@@ -48,14 +48,18 @@ reason to.
 7. **The guardrails are tools, not reviews.**
    - `tools/check-boundaries.ts` (in `pnpm lint`, on the TypeScript 7 parser, with
      probes): modules import each other only by package root and only when declared;
-     relative imports never leave their package; module dependencies are acyclic; a
-     module's schema.ts declares only `pgSchema('<its schema>')`; its SQL strings name no
-     other module's schema, nor the platform's `events` or `drizzle` schemas; every module
+     relative imports never leave their package; module dependencies are acyclic;
+     `pgSchema` is called only in a module's `src/infrastructure/persistence/schema.ts`,
+     with its own schema, and `pgTable` (the `public` schema) and renamed imports of
+     either are refused; its SQL strings name no other module's schema, nor the
+     platform's `events` or `drizzle` schemas, in any case, quoted or spaced; every module
      is in `modules.json`, a dependency of the app, and imported by its `app.module.ts`
      (mounted) and `migrations.ts` (migrated).
    - Biome's layer rules: domain code imports `@gam/kernel` only; application code never
      imports the platform kit, another module, Drizzle or Fastify.
-   - At run time, `@ModuleApi` refuses calls inside a transaction, and the app's tests
+   - At run time, `@ModuleApi` refuses calls inside a transaction (every method and
+     accessor, inherited and symbol-keyed ones included; a method written as a class
+     field cannot be guarded, so the app refuses to start with one), and the app's tests
      check that every module of `modules.json` exports, among its classes, only its Nest
      module, `@ModuleApi` classes and implementations of platform ports.
 8. **Modules are generated** from `templates/module` (`pnpm new:module`), which is itself

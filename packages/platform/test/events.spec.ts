@@ -80,7 +80,7 @@ class WidgetService {
 })
 class WidgetsModule {}
 
-type Behaviour = 'ok' | 'transient' | 'invalid' | 'bug' | 'cross-module' | 'wait';
+type Behaviour = 'ok' | 'transient' | 'invalid' | 'bug' | 'cross-module' | 'wait' | 'hang';
 
 /** Records what it saw in its own table, then behaves as told. */
 @Injectable()
@@ -114,6 +114,9 @@ class GadgetsConsumer {
         await new Promise<void>((resolve) => {
           this.release = resolve;
         });
+        return;
+      case 'hang':
+        await new Promise<void>(() => undefined);
         return;
       case 'ok':
         return;
@@ -173,7 +176,11 @@ describe('events (outbox, dispatcher, admin)', () => {
 
   beforeAll(async () => {
     db = await createTestDatabase({ migrations: [PLATFORM_MIGRATIONS, probes] });
-    api = await createTestApp({ database: db, modules: [GadgetsModule, GizmosModule] });
+    api = await createTestApp({
+      database: db,
+      modules: [GadgetsModule, GizmosModule],
+      env: { EVENTS_HANDLER_TIMEOUT_MS: '1500' },
+    });
     widgets = api.get(WidgetService);
     gadgets = api.get(GadgetsConsumer);
     gizmos = api.get(GizmosConsumer);
@@ -189,6 +196,7 @@ describe('events (outbox, dispatcher, admin)', () => {
 
   beforeEach(async () => {
     gadgets.behaviour = 'ok';
+    gadgets.release = undefined;
     gizmos.seen.length = 0;
     await db.truncate('events.events', 'widgets.widgets', 'gadgets.seen');
   });
@@ -335,6 +343,69 @@ describe('events (outbox, dispatcher, admin)', () => {
       expect(errors).toEqual(['EVENT_PAYLOAD_INVALID', 'EVENT_TYPE_NOT_HANDLED']);
     });
 
+    it('counts the attempt before the handler runs, so one cut short by a crash still counts', async () => {
+      await widgets.create('anvil');
+      gadgets.behaviour = 'wait';
+      const [event] = await recordedEvents(api);
+      const running = dispatcher.deliverNext({ subscriber: 'gadgets', eventId: event?.id ?? '' });
+      await expect.poll(() => gadgets.release).toBeDefined();
+      // Committed by the lease, before the handler: a process that dies here used it up.
+      expect(await delivery('gadgets')).toMatchObject({
+        status: 'pending',
+        attempts: 1,
+        waiting: true,
+      });
+      gadgets.release?.();
+      expect(await running).toBe('delivered');
+      expect(await delivery('gadgets')).toMatchObject({ status: 'delivered', attempts: 1 });
+    });
+
+    it('gives up on a delivery whose attempts never settled, without running it again', async () => {
+      await widgets.create('anvil');
+      await db.pool.query(
+        `update events.deliveries set attempts = ${MAX_ATTEMPTS} where subscriber = 'gadgets'`,
+      );
+      await flushEvents(api);
+      expect(await delivery('gadgets')).toMatchObject({
+        status: 'dead',
+        last_error: expect.stringMatching(/^ATTEMPTS_EXHAUSTED: /),
+      });
+      expect(await seen()).toEqual([]);
+    });
+
+    it('retries a handler that outlives its deadline, with nothing of it committed', async () => {
+      await widgets.create('anvil');
+      gadgets.behaviour = 'hang';
+      const [event] = await recordedEvents(api);
+      const outcome = await dispatcher.deliverNext({
+        subscriber: 'gadgets',
+        eventId: event?.id ?? '',
+      });
+      expect(outcome).toBe('retry');
+      expect(await delivery('gadgets')).toMatchObject({
+        status: 'pending',
+        attempts: 1,
+        waiting: true,
+        last_error: expect.stringMatching(/^HANDLER_TIMEOUT: /),
+      });
+      expect(await seen()).toEqual([]);
+      // The dispatcher is not stuck behind it.
+      expect(await flushEvents(api)).toBe(1);
+      expect(gizmos.seen).toHaveLength(1);
+    });
+
+    it('leaves deliveries of pairs this app does not handle to the replicas that do', async () => {
+      await widgets.create('anvil');
+      const [event] = await recordedEvents(api);
+      await db.pool.query(
+        `insert into events.deliveries (subscriber, event_id, type) values ('newer-module', $1, $2)`,
+        [event?.id, WIDGET_CREATED.type],
+      );
+      await flushEvents(api);
+      expect(await delivery('newer-module')).toMatchObject({ status: 'pending', attempts: 0 });
+      expect(await delivery('gadgets')).toMatchObject({ status: 'delivered' });
+    });
+
     it('never gives one delivery to two workers (SKIP LOCKED)', async () => {
       await widgets.create('anvil');
       gadgets.behaviour = 'wait';
@@ -392,6 +463,12 @@ describe('events (outbox, dispatcher, admin)', () => {
       expect(await admin.status()).toEqual([
         expect.objectContaining({ subscriber: 'gizmos', dead: 0 }),
       ]);
+
+      // A retired pair: pending deliveries no replica leases go only when asked for.
+      await admin.replay('gizmos', WIDGET_CREATED.type, new Date(0));
+      expect(await admin.drop('gizmos', WIDGET_CREATED.type)).toBe(0);
+      expect(await admin.drop('gizmos', WIDGET_CREATED.type, { retired: true })).toBe(2);
+      expect(await admin.status()).toEqual([]);
     });
 
     it('purges finished events after the retention window, never unfinished ones', async () => {
@@ -473,18 +550,77 @@ describe('event features', () => {
 });
 
 describe('ModuleApi', () => {
-  it('refuses a call inside the caller transaction, and only there', async () => {
+  class BaseApi {
+    async inherited(): Promise<string> {
+      return 'inherited';
+    }
+  }
+
+  @ModuleApi()
+  @Injectable()
+  class ShapesApi extends BaseApi {
+    async own(): Promise<string> {
+      return 'own';
+    }
+
+    get state(): string {
+      return 'state';
+    }
+
+    async [Symbol.for('probe')](): Promise<string> {
+      return 'symbol';
+    }
+  }
+
+  @Module({ providers: [ShapesApi], exports: [ShapesApi] })
+  class ShapesModule {}
+
+  it('refuses a call inside the caller transaction, and only there, whatever the shape', async () => {
     const db = await createTestDatabase({ migrations: [PLATFORM_MIGRATIONS] });
-    const api = await createTestApp({ database: db, modules: [WidgetsModule] });
+    const api = await createTestApp({ database: db, modules: [WidgetsModule, ShapesModule] });
     try {
       const widgetsApi = api.get(WidgetsApi);
       await expect(widgetsApi.count()).resolves.toBe(1);
-      await expect(api.get(UnitOfWork).run(() => widgetsApi.count())).rejects.toBeInstanceOf(
+      const unitOfWork = api.get(UnitOfWork);
+      await expect(unitOfWork.run(() => widgetsApi.count())).rejects.toBeInstanceOf(
         CrossModuleCallInTransactionError,
       );
       expect(WidgetsApi.prototype.count.name).toBe('count');
+      const shapes = api.get(ShapesApi);
+      const symbol = Symbol.for('probe') as unknown as 'own';
+      await expect(shapes.inherited()).resolves.toBe('inherited');
+      expect(shapes.state).toBe('state');
+      await expect(shapes[symbol]()).resolves.toBe('symbol');
+      for (const call of [() => shapes.own(), () => shapes.inherited(), () => shapes[symbol]()]) {
+        await expect(unitOfWork.run(call)).rejects.toBeInstanceOf(
+          CrossModuleCallInTransactionError,
+        );
+      }
+      await expect(unitOfWork.run(async () => shapes.state)).rejects.toBeInstanceOf(
+        CrossModuleCallInTransactionError,
+      );
+      // The base class itself is left alone.
+      await expect(unitOfWork.run(() => new BaseApi().inherited())).resolves.toBe('inherited');
     } finally {
       await api.close();
+      await db.dispose();
+    }
+  });
+
+  it('fails boot for a method written as a field, which the guard cannot wrap', async () => {
+    @ModuleApi()
+    @Injectable()
+    class FieldApi {
+      find = async (): Promise<number> => 1;
+    }
+    @Module({ providers: [FieldApi] })
+    class FieldModule {}
+    const db = await createTestDatabase({ migrations: [PLATFORM_MIGRATIONS] });
+    try {
+      await expect(createTestApp({ database: db, modules: [FieldModule] })).rejects.toThrow(
+        /methods written as fields.*FieldApi\.find/,
+      );
+    } finally {
       await db.dispose();
     }
   });

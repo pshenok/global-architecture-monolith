@@ -33,8 +33,31 @@ export const httpConfigSchema = z.object({
    * 2^31-1 ms at once, which would time every request out.
    */
   REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().max(600_000).default(30_000),
-  /** Trust X-Forwarded-* (only behind a known proxy). */
-  TRUST_PROXY: z.stringbool().default(false),
+  /**
+   * Which proxies' X-Forwarded-* to trust (Fastify's trustProxy), so `request.ip`, which the
+   * rate limiter keys on, is the client's address as your proxy saw it: `false` (none: no
+   * proxy in front), or a comma-separated list of the proxies' addresses or CIDRs (or
+   * `loopback`, `linklocal`, `uniquelocal`). `true` trusts every hop, so a client chooses
+   * its own address with X-Forwarded-For: only behind a proxy that overwrites the header.
+   * A hop count is refused: Fastify cannot check the nearest peer with one.
+   */
+  TRUST_PROXY: z
+    .string()
+    .default('false')
+    .transform((value, ctx): boolean | string[] => {
+      const trimmed = value.trim();
+      if (trimmed === 'false' || trimmed === '') return false;
+      if (trimmed === 'true') return true;
+      const proxies = trimmed.split(',').map((entry) => entry.trim());
+      const proxy = /^(?:[0-9a-fA-F:.]+(?:\/\d{1,3})?|loopback|linklocal|uniquelocal)$/;
+      if (!/^\d+$/.test(trimmed) && proxies.every((entry) => proxy.test(entry))) return proxies;
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          "must be false, true, or a comma-separated list of the proxies' addresses or CIDRs (Fastify does not trust a hop count)",
+      });
+      return z.NEVER;
+    }),
   /** Serve /docs (Scalar) and /openapi.json. Default: on, except when NODE_ENV=production. */
   DOCS_ENABLED: z.stringbool().optional(),
 });

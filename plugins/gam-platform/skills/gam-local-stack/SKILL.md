@@ -55,9 +55,9 @@ login registers once (`/docs` and `/openapi.json` are open).
 
 ```bash
 TOKEN=$(pnpm -s dev:token alice --email alice@example.com)   # 900 s; --ttl <s> (max 3600), --unverified
-curl -s --cacert .certs/dev-cert.pem -H "authorization: Bearer $TOKEN" \
+curl -s --cacert .certs/dev-ca.pem -H "authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' -d '{"fullName":"Alice"}' https://localhost:9443/v1/users
-curl -s --cacert .certs/dev-cert.pem -H "authorization: Bearer $TOKEN" https://localhost:9443/v1/users/me
+curl -s --cacert .certs/dev-ca.pem -H "authorization: Bearer $TOKEN" https://localhost:9443/v1/users/me
 pnpm users:grant-role <userId> admin --by <name>    # roles live in the users module, never in the IdP
 pnpm users:revoke-role <userId> admin --by <name>
 ```
@@ -114,29 +114,36 @@ first. They boot no app: they import the app module to learn which module handle
 type. Each change prints one line; keep it, it is the only record
 (`events: redrove 2 dead letter(s) of <type> for <subscriber>`).
 - `status` prints one row per (subscriber, type), or `no deliveries`. `handled` is `yes`, or
-  `NO (drop its dead letters)` when this build has no handler for the pair any more.
-- `redrive` and `drop` need both `--subscriber` and `--type` and touch dead letters only.
+  `NO (events:drop them)` when this build has no handler for the pair any more (its
+  deliveries stay pending: no replica leases them).
+- `redrive` and `drop` need both `--subscriber` and `--type`. `redrive` touches dead
+  letters only and refuses a pair no module handles; `drop` discards dead letters, and
+  pending deliveries too when no module handles the pair. Run them from the build that is
+  deployed everywhere.
 - `replay` needs `--since` as a full ISO time with a zone (`2026-10-01T00:00:00Z`,
   `2026-10-01T02:30+02:30`); it refuses a pair no module handles. It queues every event of
   the type since then (delivered ones included, or for the first time for a module that
   subscribed later). Events whose deliveries were all done are purged after 21 days
   (`RETENTION_DAYS`), so older ones are gone.
 - **Lag**: `due` and `oldestPending` in `events:status`.
-- **Dead letters**: after 10 attempts (`MAX_ATTEMPTS`, 1 s doubling to 5 min between them),
-  or at once for a failure that cannot go away. Read the app's
+- **Dead letters**: after 10 attempts (`MAX_ATTEMPTS`, 1 s doubling to 5 min between them;
+  attempts the process died in count too, as `ATTEMPTS_EXHAUSTED`), or at once for a
+  failure that cannot go away. A handler past `EVENTS_HANDLER_TIMEOUT_MS` (10 s) logs
+  `HANDLER_TIMEOUT` and retries. Read the app's
   `dead letter: <subscriber> <type> <eventId> (attempt n): <reason>: <message>` line (or
   `lastError`), fix the cause, then `events:redrive`. The failed handler rolled back with
   its acknowledgement, so a redriven delivery runs once.
 - **Shutdown budget**: on stop, the dispatcher waits for an in-flight delivery at most
   `EVENTS_DRAIN_MS` (default 5000, at most 14000). Keep it below PM2's `kill_timeout`
   (15000, Kubernetes `terminationGracePeriodSeconds` in a cluster). Past it the app logs
-  `stopped with a delivery in flight; it rolls back and is due again`, which is harmless.
+  `stopped with a delivery in flight; it rolls back and is due again after its lease`,
+  which is harmless.
 - Events register no health check: a stuck delivery never takes the API out of rotation.
 
 ## Following one request
 
 ```bash
-curl -s --cacert .certs/dev-cert.pem -H 'x-request-id: debug-42' 'https://localhost:9443/v1/houses?pageSize=1'
+curl -s --cacert .certs/dev-ca.pem -H 'x-request-id: debug-42' 'https://localhost:9443/v1/houses?pageSize=1'
 grep -h debug-42 ~/.pm2/logs/gam-api-*.log
 ```
 

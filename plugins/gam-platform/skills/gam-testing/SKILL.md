@@ -141,12 +141,12 @@ array of bare promises starts every call at once, and a rejection that settles b
 
 Helpers from `@gam/platform/testing` (tests run with `EVENTS_AUTOSTART=false`):
 
-| Helper                                                                     | Use                                                                                                                                                                               |
-| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `recordedEvents(api, type?)`                                               | events recorded so far, oldest first: `{ id, type, producer, aggregateId, payload, requestId, deliveries[] }`                                                                     |
-| `deliverEvent(api, { subscriber, event, aggregateId, payload, attempt? })` | records the event as its producer would, with a delivery to `subscriber` only, and delivers it now; returns `{ eventId, outcome }` (`'delivered'`, `'retry'`, `'dead'`, `'none'`) |
-| `flushEvents(api, maxRounds = 20)`                                         | delivers every due event, round after round, so reactions to reactions run; returns how many; throws when still busy after `maxRounds`                                            |
-| `EventDispatcher` (`api.get(EventDispatcher)`)                             | `runOnce(limit)`, `deliverNext()` for finer control                                                                                                                               |
+| Helper                                                                     | Use                                                                                                                                                                                                                          |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `recordedEvents(api, type?)`                                               | events recorded so far, oldest first: `{ id, type, producer, aggregateId, payload, requestId, deliveries[] }`                                                                                                                |
+| `deliverEvent(api, { subscriber, event, aggregateId, payload, attempt? })` | records the event as its producer would, with a delivery to `subscriber` only, and delivers it now; returns `{ eventId, outcome }` (`'delivered'`, `'retry'`, `'dead'`, `'none'`, or `'lost'` when its lease was taken over) |
+| `flushEvents(api, maxRounds = 20)`                                         | delivers every due event, round after round, so reactions to reactions run; returns how many; throws when still busy after `maxRounds`                                                                                       |
+| `EventDispatcher` (`api.get(EventDispatcher)`)                             | `runOnce(limit)`, `deliverNext()` for finer control                                                                                                                                                                          |
 - **Producer**: assert `recordedEvents` after the request, and that a refused request
   recorded nothing (houses: "records HouseDeletedEvent when the owner deletes a house, not
   when a stranger tries").
@@ -190,7 +190,7 @@ options)`, `bearer(token)`, `api(method, path, body, headers)` and `raw(path)` s
 requests; `eventually(check, { timeoutMs = 15_000, intervalMs = 200 })` waits for the
 effects of events (`events.e2e.spec.ts`, which first checks that `/readyz` says `ok`). The
 suite runs its files one after another against `https://localhost:9443` (`E2E_BASE_URL`
-overrides it), trusting `.certs/dev-cert.pem`.
+overrides it), trusting `.certs/dev-ca.pem` (mkcert's root, or the self-signed certificate).
 
 ## Conventions and pitfalls
 

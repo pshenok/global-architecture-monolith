@@ -27,8 +27,10 @@
  *    oxlint implicit `any` (no-unsafe-*); `@ts-ignore`/`@ts-expect-error`/`@ts-nocheck`,
  *    suppressions of the any-rules (or of everything) and non-.ts or .d.ts files fail here.
  * 3. Production code never reaches the test helpers (kernel testing.ts, the platform's
- *    testing/) by any route, and never loads a module from a computed specifier or
- *    through createRequire.
+ *    testing/) by any route, never loads a module from a computed specifier or through
+ *    createRequire, and never touches the request context (nestjs-cls), where the kit
+ *    keeps actors and request ids. Suppressions of Biome's layer rules
+ *    (noRestrictedImports) and of noImportCycles are refused like the any-rules'.
  * 4. Routes are controller routes: outside the platform kit (whose http/bootstrap.ts and
  *    http/openapi.ts are the only files that touch the raw server), no code touches the
  *    HTTP adapter, the Fastify instance, Nest middleware or Nest's registries
@@ -43,7 +45,7 @@
  * review.
  */
 import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import {
   type AsExpression,
   type BindingElement,
@@ -90,7 +92,16 @@ interface Entry {
 }
 
 const LIST = join(ROOT, 'security/public-endpoints.json');
-const SKIP_DIRS = new Set(['node_modules', 'dist', '.turbo', 'coverage', 'drizzle']);
+/** Skipped wherever they are. */
+const SKIP_DIRS = new Set(['node_modules', '.turbo']);
+/**
+ * Skipped only at a package's root (`<top>/<package>/<name>`): its build output and
+ * migrations. A folder with one of these names inside src/ is code, and is checked.
+ */
+const SKIP_AT_PACKAGE_ROOT = new Set(['dist', 'coverage', 'drizzle']);
+const skipped = (path: string, name: string) =>
+  SKIP_DIRS.has(name) ||
+  (SKIP_AT_PACKAGE_ROOT.has(name) && relative(ROOT, path).split(sep).length === 3);
 
 /** Production code: source folders and tools, without tests. */
 const isProduction = (file: string) =>
@@ -168,14 +179,16 @@ const RAW_HTTP_FILE =
  * would let a literal or an `any` pass as an actor without an assertion to see.
  */
 const SUPPRESSIONS =
-  /@ts-(?:ignore|expect-error|nocheck)|(?:oxlint|eslint)-disable(?:-next-line|-line)?(?:\s*(?:\*\/|--|$)|[^\n]*(?:no-unsafe-|no-explicit-any))|biome-ignore-(?:all|start)\b|biome-ignore\s+lint\s*:|biome-ignore\s+lint\/suspicious(?:\s*:|\/noExplicitAny)/;
+  /@ts-(?:ignore|expect-error|nocheck)|(?:oxlint|eslint)-disable(?:-next-line|-line)?(?:\s*(?:\*\/|--|$)|[^\n]*(?:no-unsafe-|no-explicit-any))|biome-ignore-(?:all|start)\b|biome-ignore\s+lint\s*:|biome-ignore\s+lint\/suspicious(?:\s*:|\/noExplicitAny|\/noImportCycles)|biome-ignore\s+lint\/style(?:\s*:|\/noRestrictedImports)/;
+/** The request context: actors and request ids live there, and only the platform kit writes it. */
+const CLS_FILE = /node_modules\/(?:nestjs-cls|@nestjs-cls\/[^/]+)\//;
 /** The kernel's actor brand: a unique symbol declared in packages/kernel/src/actor.ts. */
 const BRAND = /^__@verified@\d+$/;
 
 function* sourceFiles(dir: string): Generator<string> {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
-    if (SKIP_DIRS.has(entry.name)) continue;
+    if (skipped(path, entry.name)) continue;
     if (entry.isDirectory()) yield* sourceFiles(path);
     else yield path;
   }
@@ -425,7 +438,7 @@ function checkFile(
     source.text.split('\n').forEach((line, index) => {
       if (SUPPRESSIONS.test(line)) {
         problems.push(
-          `${shown}:${index + 1}: turns type checking or an any-rule off; fix the types instead`,
+          `${shown}:${index + 1}: turns type checking, an any-rule, a layer rule or the import-cycle rule off; fix the code instead`,
         );
       }
     });
@@ -478,6 +491,11 @@ function checkFile(
     }
     if (!tools && target.name === 'createRequire') {
       problems.push(`${at(identifier)}: loads modules through createRequire`);
+    }
+    if (!kit && !tools && declaredIn(target, CLS_FILE)) {
+      problems.push(
+        `${at(identifier)}: uses the request context (${target.name}) directly; the platform kit owns it (actors, request ids)`,
+      );
     }
     if (
       !definesAccess &&
@@ -811,6 +829,13 @@ const PROBES = [
 
 function selfTest(snapshot: ReturnType<API['updateSnapshot']>): void {
   for (const probe of PROBES) {
+    // The walker must reach every probe, nested folders included.
+    const walked = new Set(sourceFiles(join(ROOT, probe.dir)));
+    for (const file of readdirSync(join(ROOT, probe.dir), { recursive: true, encoding: 'utf8' })) {
+      if (file.endsWith('.ts') && !walked.has(join(ROOT, probe.dir, file))) {
+        problems.push(`check-access self-test: the source walker skips ${join(probe.dir, file)}`);
+      }
+    }
     for (const path of sourceFiles(join(ROOT, probe.dir))) {
       const shown = relative(ROOT, path);
       const project = snapshot.getDefaultProjectForFile(path);

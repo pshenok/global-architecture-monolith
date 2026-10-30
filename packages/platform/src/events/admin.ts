@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from '../database/tokens.ts';
 import { RETENTION_DAYS } from './dispatcher.ts';
 import { deliveries } from './tables.ts';
@@ -93,15 +93,18 @@ export class EventsAdmin {
     return result.rows.length;
   }
 
-  /** Discards the pair's dead letters. Returns how many. */
-  async drop(subscriber: string, type: string): Promise<number> {
+  /**
+   * Discards the pair's dead letters; with `retired` (no module handles the pair any more,
+   * so the dispatcher never leases them) its pending deliveries too. Returns how many.
+   */
+  async drop(subscriber: string, type: string, { retired = false } = {}): Promise<number> {
     const rows = await this.db
       .delete(deliveries)
       .where(
         and(
           eq(deliveries.subscriber, subscriber),
           eq(deliveries.type, type),
-          eq(deliveries.status, 'dead'),
+          inArray(deliveries.status, retired ? ['dead', 'pending'] : ['dead']),
         ),
       )
       .returning({ eventId: deliveries.eventId });

@@ -10,7 +10,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { parseArgs } from 'node:util';
 import { type ModuleEntry, ROOT, readRegistry, writeRegistry } from './lib.ts';
@@ -89,97 +89,147 @@ if (existsSync(moduleDir)) throw new Error(`${entry.dir} already exists`);
 if (registry.modules.some((m) => m.name === entry.name || m.schema === entry.schema)) {
   throw new Error(`a module named ${entry.name} (or with schema ${entry.schema}) exists`);
 }
-if (['events', 'drizzle', 'public'].includes(entry.schema)) {
-  throw new Error(`${entry.schema} is a reserved schema name`);
+if (
+  ['events', 'drizzle', 'public', 'sample_items'].includes(entry.schema) ||
+  /^pg_/.test(entry.schema)
+) {
+  throw new Error(`${entry.schema} is a reserved schema name (or the template's own)`);
+}
+/** Words the template's identifiers (`const sampleItem`, `sampleItems`) cannot take. */
+const RESERVED = new Set(
+  (
+    'arguments await break case catch class const continue debugger default delete do else ' +
+    'enum eval export extends false finally for function if implements import in instanceof ' +
+    'interface let new null package private protected public return static super switch this ' +
+    'throw true try typeof var void while with yield'
+  ).split(' '),
+);
+for (const word of [singular.camel, plural.camel]) {
+  if (RESERVED.has(word)) {
+    throw new Error(`"${word}" is a reserved word in JavaScript: pick another noun`);
+  }
 }
 
-const templateDir = join(ROOT, 'templates/module');
-const SKIP = /^(?:node_modules|dist|drizzle|\.turbo|coverage)(?:\/|$)/;
-const files = (await readdir(templateDir, { recursive: true, withFileTypes: true }))
-  .filter((file) => file.isFile())
-  .map((file) => relative(templateDir, join(file.parentPath, file.name)))
-  .filter((file) => !SKIP.test(file));
-for (const file of files) {
-  const target = join(moduleDir, substitute(file));
-  await mkdir(dirname(target), { recursive: true });
-  const text = await readFile(join(templateDir, file), 'utf8');
-  await writeFile(
-    target,
-    substitute(
-      file === 'package.json'
-        ? text.replace(
-            'Sample items module (generated from templates/module by pnpm new:module).',
-            `${capitalize(plural.spaced)} module.`,
-          )
-        : text,
-    ),
-  );
-}
-
-/** Inserts `line` above the marker comment in a file of the app. */
-async function insertAbove(file: string, marker: string, line: string): Promise<void> {
-  const path = join(ROOT, file);
-  const text = await readFile(path, 'utf8');
-  const index = text.indexOf(marker);
-  if (index < 0) throw new Error(`${file} lost its marker "${marker.trim()}"`);
-  const lineStart = text.lastIndexOf('\n', index) + 1;
-  await writeFile(path, `${text.slice(0, lineStart)}${line}\n${text.slice(lineStart)}`);
-}
-
-async function prependImport(file: string, line: string): Promise<void> {
-  const path = join(ROOT, file);
-  await writeFile(path, `${line}\n${await readFile(path, 'utf8')}`);
-}
-
+const APP_MODULE = `${registry.api.dir}/src/app.module.ts`;
+const APP_MIGRATIONS = `${registry.api.dir}/src/migrations.ts`;
+const MODULES_MARKER = '// pnpm new:module adds feature modules';
+const MIGRATIONS_MARKER = '// pnpm new:module adds migration sets';
 if (!values['no-register']) {
-  registry.modules.push(entry);
-  writeRegistry(registry);
-  const apiPackage = join(ROOT, registry.api.dir, 'package.json');
-  const manifest = JSON.parse(await readFile(apiPackage, 'utf8')) as {
-    dependencies: Record<string, string>;
-  };
-  manifest.dependencies[entry.package] = 'workspace:*';
-  manifest.dependencies = Object.fromEntries(
-    Object.entries(manifest.dependencies).sort(([a], [b]) => a.localeCompare(b)),
-  );
-  await writeFile(apiPackage, `${JSON.stringify(manifest, null, 2)}\n`);
-  await prependImport(
-    `${registry.api.dir}/src/app.module.ts`,
-    `import { ${plural.pascal}Module } from '${entry.package}';`,
-  );
-  await insertAbove(
-    `${registry.api.dir}/src/app.module.ts`,
-    '// pnpm new:module adds feature modules',
-    `    ${plural.pascal}Module,`,
-  );
-  await prependImport(
-    `${registry.api.dir}/src/migrations.ts`,
-    `import { ${plural.upper}_MIGRATIONS } from '${entry.package}';`,
-  );
-  await insertAbove(
-    `${registry.api.dir}/src/migrations.ts`,
-    '// pnpm new:module adds migration sets',
-    `  ${plural.upper}_MIGRATIONS,`,
-  );
+  for (const [file, marker] of [
+    [APP_MODULE, MODULES_MARKER],
+    [APP_MIGRATIONS, MIGRATIONS_MARKER],
+  ] as const) {
+    if (!(await readFile(join(ROOT, file), 'utf8')).includes(marker)) {
+      throw new Error(`${file} lost its marker "${marker}": put it back first`);
+    }
+  }
 }
+/** Files this run changes, as they were: a failed run puts them back. */
+const TOUCHED = [
+  'modules.json',
+  'pnpm-lock.yaml',
+  `${registry.api.dir}/package.json`,
+  APP_MODULE,
+  APP_MIGRATIONS,
+];
+const snapshot = new Map(
+  await Promise.all(
+    TOUCHED.map(async (file) => [file, await readFile(join(ROOT, file), 'utf8')] as const),
+  ),
+);
 
 const run = (command: string, args: string[]) => {
   console.log(`$ ${command} ${args.join(' ')}`);
   execFileSync(command, args, { cwd: ROOT, stdio: 'inherit' });
 };
-if (!values['skip-install']) {
-  run('pnpm', ['install', '--prefer-offline', '--no-frozen-lockfile']);
-  run('pnpm', ['--filter', entry.package, 'db:generate', '--name', 'init']);
+
+try {
+  const templateDir = join(ROOT, 'templates/module');
+  const SKIP = /^(?:node_modules|dist|drizzle|\.turbo|coverage)(?:\/|$)/;
+  const files = (await readdir(templateDir, { recursive: true, withFileTypes: true }))
+    .filter((file) => file.isFile())
+    .map((file) => relative(templateDir, join(file.parentPath, file.name)))
+    .filter((file) => !SKIP.test(file));
+  for (const file of files) {
+    const target = join(moduleDir, substitute(file));
+    await mkdir(dirname(target), { recursive: true });
+    const text = await readFile(join(templateDir, file), 'utf8');
+    await writeFile(
+      target,
+      substitute(
+        file === 'package.json'
+          ? text.replace(
+              'Sample items module (generated from templates/module by pnpm new:module).',
+              `${capitalize(plural.spaced)} module.`,
+            )
+          : text,
+      ),
+    );
+  }
+
+  /** Inserts `line` above the marker comment in a file of the app. */
+  async function insertAbove(file: string, marker: string, line: string): Promise<void> {
+    const path = join(ROOT, file);
+    const text = await readFile(path, 'utf8');
+    const index = text.indexOf(marker);
+    if (index < 0) throw new Error(`${file} lost its marker "${marker.trim()}"`);
+    const lineStart = text.lastIndexOf('\n', index) + 1;
+    await writeFile(path, `${text.slice(0, lineStart)}${line}\n${text.slice(lineStart)}`);
+  }
+
+  async function prependImport(file: string, line: string): Promise<void> {
+    const path = join(ROOT, file);
+    await writeFile(path, `${line}\n${await readFile(path, 'utf8')}`);
+  }
+
+  if (!values['no-register']) {
+    registry.modules.push(entry);
+    writeRegistry(registry);
+    const apiPackage = join(ROOT, registry.api.dir, 'package.json');
+    const manifest = JSON.parse(await readFile(apiPackage, 'utf8')) as {
+      dependencies: Record<string, string>;
+    };
+    manifest.dependencies[entry.package] = 'workspace:*';
+    manifest.dependencies = Object.fromEntries(
+      Object.entries(manifest.dependencies).sort(([a], [b]) => a.localeCompare(b)),
+    );
+    await writeFile(apiPackage, `${JSON.stringify(manifest, null, 2)}\n`);
+    await prependImport(APP_MODULE, `import { ${plural.pascal}Module } from '${entry.package}';`);
+    await insertAbove(APP_MODULE, MODULES_MARKER, `    ${plural.pascal}Module,`);
+    await prependImport(
+      APP_MIGRATIONS,
+      `import { ${plural.upper}_MIGRATIONS } from '${entry.package}';`,
+    );
+    await insertAbove(APP_MIGRATIONS, MIGRATIONS_MARKER, `  ${plural.upper}_MIGRATIONS,`);
+  }
+
+  if (!values['skip-install']) {
+    run('pnpm', ['install', '--prefer-offline', '--no-frozen-lockfile']);
+    run('pnpm', ['--filter', entry.package, 'db:generate', '--name', 'init']);
+  }
+  // Renames change line lengths and import order: let Biome restore the canonical format.
+  run('pnpm', [
+    'exec',
+    'biome',
+    'check',
+    '--write',
+    entry.dir,
+    ...(values['no-register'] ? [] : ['modules.json', registry.api.dir]),
+  ]);
+} catch (error) {
+  // Leave nothing half-made: the module folder goes, the app's files come back.
+  console.error(`\nnew:module failed, rolling back: ${String(error)}`);
+  await rm(moduleDir, { recursive: true, force: true });
+  for (const [file, text] of snapshot) await writeFile(join(ROOT, file), text);
+  if (!values['skip-install']) {
+    try {
+      run('pnpm', ['install', '--prefer-offline', '--no-frozen-lockfile']);
+    } catch {
+      console.error('pnpm install after the rollback failed: run it yourself');
+    }
+  }
+  process.exit(1);
 }
-// Renames change line lengths and import order: let Biome restore the canonical format.
-run('pnpm', [
-  'exec',
-  'biome',
-  'check',
-  '--write',
-  entry.dir,
-  ...(values['no-register'] ? [] : ['modules.json', registry.api.dir]),
-]);
 
 console.log(`
 Created ${entry.package}

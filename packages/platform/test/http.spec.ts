@@ -213,10 +213,45 @@ describe('the HTTP API (AuthGuard, problem details, headers, docs)', () => {
     const document = (await get('/openapi.json')).json();
     expect(document.security).toEqual([{ bearer: [] }]);
     expect(document.paths['/probe/public'].get.security).toEqual([]);
-    expect(document.paths['/probe/user'].get.responses).toHaveProperty('401');
-    expect(document.paths['/probe/user'].get.responses).toHaveProperty('403');
+    const problem = {
+      'application/problem+json': { schema: { $ref: '#/components/schemas/ProblemDetails' } },
+    };
+    expect(document.paths['/probe/user'].get.responses['401'].content).toEqual(problem);
+    expect(document.paths['/probe/user'].get.responses['403'].content).toEqual(problem);
+    expect(document.paths['/probe/public'].get.responses).not.toHaveProperty('401');
+    expect(document.components.schemas.ProblemDetails.properties.code).toBeDefined();
     expect(document.paths).not.toHaveProperty('/healthz');
     expect(JSON.stringify(document)).not.toContain('x-gam-public');
+  });
+});
+
+describe('rate limiting behind a proxy', () => {
+  let db: TestDatabase;
+  let api: TestApp;
+
+  beforeAll(async () => {
+    db = await createTestDatabase({ migrations: [PLATFORM_MIGRATIONS] });
+    api = await createTestApp({
+      database: db,
+      modules: [ProbeModule],
+      env: { TRUST_PROXY: '127.0.0.1', RATE_LIMIT_PER_MINUTE: '3' },
+    });
+  });
+
+  afterAll(async () => {
+    await api?.close();
+    await db?.dispose();
+  });
+
+  const from = (forwarded: string) =>
+    api.inject({ method: 'GET', url: '/probe/public', headers: { 'x-forwarded-for': forwarded } });
+
+  it('keys on the address the trusted hop reports, not on what the client prepends', async () => {
+    const statuses: number[] = [];
+    for (let n = 0; n < 5; n += 1)
+      statuses.push((await from(`203.0.113.${n}, 198.51.100.7`)).statusCode);
+    expect(statuses).toEqual([200, 200, 200, 429, 429]);
+    expect((await from('203.0.113.9, 198.51.100.8')).statusCode).toBe(200);
   });
 });
 
@@ -270,6 +305,20 @@ describe('platform config', () => {
     expect(() => parseConfig(ConfigSchema, { ...env, AUTH_ISSUERS: 'not json' })).toThrow(
       /JSON array/,
     );
+  });
+
+  it("takes the proxies' addresses for TRUST_PROXY, never a hop count", () => {
+    const trust = (value: string) =>
+      parseConfig(ConfigSchema, { ...env, TRUST_PROXY: value }).TRUST_PROXY;
+    expect(trust('false')).toBe(false);
+    expect(trust('true')).toBe(true);
+    expect(trust('10.0.0.0/8, 192.168.1.1, loopback')).toEqual([
+      '10.0.0.0/8',
+      '192.168.1.1',
+      'loopback',
+    ]);
+    expect(() => trust('1')).toThrow(/hop count/);
+    expect(() => trust('yes please')).toThrow(/TRUST_PROXY/);
   });
 
   it('requires a postgres URL', () => {

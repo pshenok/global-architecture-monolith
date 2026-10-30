@@ -46,9 +46,9 @@ pnpm stack:down
 
 ```bash
 TOKEN=$(pnpm -s dev:token ann --email ann@example.com)   # a login at the local dev IdP
-curl -s --cacert .certs/dev-cert.pem https://localhost:9443/v1/users \
+curl -s --cacert .certs/dev-ca.pem https://localhost:9443/v1/users \
   -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"fullName":"Ann"}'
-curl -s --cacert .certs/dev-cert.pem https://localhost:9443/v1/users/me -H "authorization: Bearer $TOKEN"
+curl -s --cacert .certs/dev-ca.pem https://localhost:9443/v1/users/me -H "authorization: Bearer $TOKEN"
 ```
 
 Every route except the health probes and the house catalogue needs a token, and every

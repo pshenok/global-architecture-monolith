@@ -9,8 +9,24 @@ import {
 } from '@gam/kernel';
 import { type ClsService, ClsServiceManager } from 'nestjs-cls';
 
-const CLS_ACTOR = 'gam.auth.actor';
-const CLS_EVENT = 'gam.events.event';
+/*
+ * Private keys and a record of what the kit minted: a value another module puts into the
+ * request context by hand is never taken for an actor or an event (the kit's own values
+ * are the only ones in `minted`).
+ */
+const CLS_ACTOR = Symbol('gam.auth.actor');
+const CLS_EVENT = Symbol('gam.events.event');
+const minted = new WeakSet<object>();
+
+function mint<T extends object>(value: T): T {
+  minted.add(value);
+  return value;
+}
+
+/** The request context's store, keyed by the symbols above. */
+function storeOf(cls: ClsService): Record<symbol, unknown> | undefined {
+  return cls.get();
+}
 
 /** The event a handler is processing (ADR-0005); only the kit's EventDispatcher sets it. */
 export interface EventInfo {
@@ -41,7 +57,9 @@ function activeCls(): ClsService | undefined {
  */
 
 export function userActorOf(userId: string, roles: readonly Role[]): UserActor {
-  return Object.freeze({ kind: 'user', userId, roles: Object.freeze([...roles]) }) as UserActor;
+  return mint(
+    Object.freeze({ kind: 'user', userId, roles: Object.freeze([...roles]) }) as UserActor,
+  );
 }
 
 export function identityActorOf(
@@ -49,29 +67,36 @@ export function identityActorOf(
   subject: string,
   email: string | null,
 ): IdentityActor {
-  return Object.freeze({ kind: 'identity', issuer, subject, email }) as IdentityActor;
+  return mint(Object.freeze({ kind: 'identity', issuer, subject, email }) as IdentityActor);
 }
 
 export function serviceActorOf(name: string): ServiceActor {
-  return Object.freeze({ kind: 'service', name }) as ServiceActor;
+  return mint(Object.freeze({ kind: 'service', name }) as ServiceActor);
 }
 
 /** For the AuthGuard only: makes `actor` the actor of the current request. */
 export function enterActor(actor: UserActor | IdentityActor): void {
-  const cls = activeCls();
-  if (!cls) throw new Error('enterActor needs an active request context (CLS)');
-  cls.set(CLS_ACTOR, actor);
+  const store = (() => {
+    const cls = activeCls();
+    return cls && storeOf(cls);
+  })();
+  if (!store) throw new Error('enterActor needs an active request context (CLS)');
+  store[CLS_ACTOR] = actor;
 }
 
 /** For the EventDispatcher only: a delivery runs as the subscribing module itself. */
 export function enterEventDelivery(cls: ClsService, module: string, event: EventInfo): void {
-  cls.set(CLS_ACTOR, serviceActorOf(module));
-  cls.set(CLS_EVENT, Object.freeze({ ...event }));
+  const store = storeOf(cls);
+  if (!store) throw new Error('enterEventDelivery needs an active request context (CLS)');
+  store[CLS_ACTOR] = serviceActorOf(module);
+  store[CLS_EVENT] = mint(Object.freeze({ ...event }));
 }
 
-/** A value of the current request context; undefined outside a request. */
-function fromCls(key: string): unknown {
-  return activeCls()?.get(key);
+/** A value the kit put into the current request context; undefined for anything else. */
+function fromCls(key: symbol): object | undefined {
+  const cls = activeCls();
+  const value = cls && storeOf(cls)?.[key];
+  return typeof value === 'object' && value !== null && minted.has(value) ? value : undefined;
 }
 
 /** The actor of the current request; anonymous outside a request or on public routes. */

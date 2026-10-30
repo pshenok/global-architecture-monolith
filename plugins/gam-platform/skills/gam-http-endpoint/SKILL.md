@@ -188,8 +188,9 @@ map by `KIND_TO_HTTP_STATUS` (`gam-domain-logic`). The platform adds:
 HTTPS with HTTP/2 + HTTP/1.1 (`TLS_ENABLED`, off only behind a TLS proxy), authentication
 of every route, security headers on every response (`/docs` relaxes its own CSP), an
 optional CORS allowlist (`CORS_ORIGINS`; exposes `x-request-id`, `location`,
-`www-authenticate`), a rate limit per client (`RATE_LIMIT_PER_MINUTE`, 600; `@SkipThrottle()`
-on the probes), a body limit (`BODY_LIMIT_BYTES`, 1 MiB), `x-request-id` in and out (an
+`www-authenticate`), a rate limit per client address (`RATE_LIMIT_PER_MINUTE`, 600;
+`@SkipThrottle()` on the probes; behind a proxy set `TRUST_PROXY` to the proxies'
+addresses or CIDRs, or every client shares the proxy's address), a body limit (`BODY_LIMIT_BYTES`, 1 MiB), `x-request-id` in and out (an
 unsafe inbound id is replaced), one access log line per request with the `authorization`
 and `cookie` headers redacted, `/healthz` and `/readyz` (`gam-local-stack`), a per-request
 deadline (`REQUEST_TIMEOUT_MS`, upload and handler included, HTTP/2 too: 504, the

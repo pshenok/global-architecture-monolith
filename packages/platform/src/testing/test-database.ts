@@ -41,6 +41,21 @@ export async function createTestDatabase(options: {
   const url = new URL(baseUrl);
   url.pathname = `/${name}`;
   const drop = () => admin.query(`drop database if exists "${name}" with (force)`);
+  /**
+   * Waits (at most 2 s) for the database's sessions to end on their own. pg's Pool.end()
+   * resolves before its clients have closed, and FORCE would kill one that is still
+   * closing: its pg.Client then throws the FATAL as an uncaught error in the test run.
+   */
+  const settle = async () => {
+    for (let round = 0; round < 40; round += 1) {
+      const sessions = await admin.query<{ count: number }>(
+        'select count(*)::int as count from pg_stat_activity where datname = $1',
+        [name],
+      );
+      if (sessions.rows[0]?.count === 0) return;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  };
   try {
     await runMigrations({ databaseUrl: url.toString(), sets: options.migrations, lockKey: name });
   } catch (error) {
@@ -66,6 +81,7 @@ export async function createTestDatabase(options: {
     async dispose() {
       await pool.end();
       try {
+        await settle();
         await drop();
       } finally {
         await admin.end();

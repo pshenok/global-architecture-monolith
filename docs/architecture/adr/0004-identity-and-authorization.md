@@ -146,7 +146,10 @@ fields. Rules:
   implicit `any`, and check-access refuses `@ts-ignore`-style comments, suppressions of
   the any-rules and non-`.ts` files. No production code reaches the test helpers, loads a
   module by a computed path or `createRequire`, or (outside the platform kit) touches the
-  raw server, Nest middleware or Nest's registries. TypeScript is not sound, so these
+  raw server, Nest middleware or Nest's registries. The request context keeps the actor
+  under the kit's private symbols and gives back only actors the kit minted; outside the
+  kit no code imports `nestjs-cls` (where the context lives) or suppresses Biome's import
+  rules to reach it. TypeScript is not sound, so these
   rules list the ways around the brand that reviews found; each is a probe
   (`modules/houses/test/access-probes`, `apps/api/test/access-probes`) that check-access
   checks on every run, so a rule that stops working fails lint.
@@ -158,9 +161,10 @@ fields. Rules:
   that called it, and an unknown caller is refused.
 - What neither sees is code that defeats the type checker at run time (`eval` and the
   like) or edits the guardrails themselves; that is what CODEOWNERS review is for.
-  `.github/CODEOWNERS` covers `security/`, the whole platform kit, the kernel's actor,
-  testing and index files, the app's composition and main, the guardrail tools and their
-  probes, `modules.json`, and everything that decides whether and how the checks run.
+  `.github/CODEOWNERS` covers `security/`, the whole platform kit and its tests, the
+  kernel's actor, testing and index files, the app's composition, main and boot tests
+  (`app.spec.ts`), the guardrail tools and their probes, `modules.json`, and everything
+  that decides whether and how the checks run.
 - The module template starts every new module with five access tests (no user, another
   user, admin, a stranger's empty list, a login without a user).
 

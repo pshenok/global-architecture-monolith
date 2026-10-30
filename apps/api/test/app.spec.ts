@@ -148,7 +148,15 @@ describe('the app', () => {
       .filter(({ operation }) => operation.security?.length === 0)
       .map(({ id }) => id);
     expect(open.sort()).toEqual(['GET /v1/houses', 'GET /v1/houses/{id}']);
+    const problem = {
+      'application/problem+json': { schema: { $ref: '#/components/schemas/ProblemDetails' } },
+    };
     for (const { id, operation } of operations) {
+      for (const [status, response] of Object.entries(operation.responses)) {
+        if (Number(status) >= 400) {
+          expect((response as { content: unknown }).content, `${id} ${status}`).toEqual(problem);
+        }
+      }
       if (open.includes(id)) continue;
       expect(operation.responses, id).toHaveProperty('401');
       expect(operation.responses, id).toHaveProperty('403');

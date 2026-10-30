@@ -1,7 +1,9 @@
 /**
  * The API's local HTTPS certificate in .certs/ (git-ignored): mkcert when installed
- * (trusted by browsers), otherwise a self-signed ECDSA certificate via openssl (clients
- * must trust .certs/dev-cert.pem or skip verification).
+ * (trusted by browsers), otherwise a self-signed ECDSA certificate via openssl. Clients
+ * that do not use the system's trust store (curl --cacert, the stack's readiness wait,
+ * the e2e suite) trust .certs/dev-ca.pem: mkcert's root, or the self-signed certificate
+ * itself.
  *
  * An existing certificate is kept unless it expires within 30 days; works with OpenSSL 3+
  * and the LibreSSL that ships with macOS.
@@ -11,7 +13,15 @@
  */
 import { execFileSync } from 'node:child_process';
 import { X509Certificate } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ROOT } from './lib.ts';
@@ -35,6 +45,9 @@ const replacing = (...files: string[]) => {
   for (const file of files) rmSync(file, { force: true });
 };
 
+const cert = join(dir, 'dev-cert.pem');
+const caFile = join(dir, 'dev-ca.pem');
+
 const has = (command: string) => {
   try {
     execFileSync(command, ['-version'], { stdio: 'ignore' });
@@ -57,12 +70,12 @@ const expiresSoon = (file: string) =>
   Date.parse(new X509Certificate(readFileSync(file)).validTo) - Date.now() < RENEW_BEFORE_MS;
 
 function httpsCertificate(): void {
-  const cert = join(dir, 'dev-cert.pem');
   const key = join(dir, 'dev-key.pem');
   if (existsSync(cert) && existsSync(key) && !force) {
     ownerOnly(key);
     if (!expiresSoon(cert)) {
       console.log(`certificate exists: ${cert} (use --force to regenerate)`);
+      writeCa();
       return;
     }
     console.log(`${cert} expires within 30 days: regenerating it`);
@@ -97,6 +110,26 @@ function httpsCertificate(): void {
     console.log('self-signed certificate created (install mkcert for a browser-trusted one)');
   }
   console.log(`cert: ${cert}\nkey:  ${key}`);
+  writeCa();
+}
+
+/** The certificate clients trust: the certificate itself when self-signed, else mkcert's root. */
+function writeCa(): void {
+  const certificate = new X509Certificate(readFileSync(cert));
+  let ca: Buffer;
+  if (certificate.checkIssued(certificate) && certificate.verify(certificate.publicKey)) {
+    ca = readFileSync(cert);
+  } else {
+    if (!has('mkcert')) {
+      throw new Error(
+        `${cert} is not self-signed and mkcert is not installed: run pnpm certs --force`,
+      );
+    }
+    const root = execFileSync('mkcert', ['-CAROOT'], { encoding: 'utf8' }).trim();
+    ca = readFileSync(join(root, 'rootCA.pem'));
+  }
+  writeFileSync(caFile, ca);
+  console.log(`clients trust: ${caFile}`);
 }
 
 httpsCertificate();

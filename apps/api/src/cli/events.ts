@@ -7,7 +7,10 @@
  *   node dist/cli/events.js status|redrive|replay|drop ...            (DATABASE_URL set)
  * redrive makes the pair's dead letters due again; replay delivers its events since a time
  * again (or for the first time, to a module that subscribed later); drop discards its dead
- * letters. Each change prints one line; keep it (job log, ticket), it is the only record.
+ * letters, and its pending deliveries too once no module handles the pair (the dispatcher
+ * leaves those alone). Run them from the build deployed everywhere: "handled" is what this
+ * build's modules handle. Each change prints one line; keep it (job log, ticket), it is
+ * the only record.
  * It boots no app: it reads which module handles which type from the modules themselves.
  */
 import { parseArgs } from 'node:util';
@@ -55,8 +58,13 @@ if (
 const handled = new Set(eventCatalog().map((entry) => `${entry.subscriber} ${entry.type}`));
 const isHandled = (subscriber: string, type: string) => handled.has(`${subscriber} ${type}`);
 
-if (command === 'replay' && !isHandled(values.subscriber as string, values.type as string)) {
-  console.error(`${values.subscriber} has no handler of ${values.type}: nothing to replay to`);
+if (
+  (command === 'replay' || command === 'redrive') &&
+  !isHandled(values.subscriber as string, values.type as string)
+) {
+  console.error(
+    `${values.subscriber} has no handler of ${values.type}: nothing to ${command} to (events:drop discards them)`,
+  );
   process.exit(1);
 }
 
@@ -72,15 +80,21 @@ try {
       console.table(
         rows.map((row) => ({
           ...row,
-          handled: isHandled(row.subscriber, row.type) ? 'yes' : 'NO (drop its dead letters)',
+          handled: isHandled(row.subscriber, row.type) ? 'yes' : 'NO (events:drop them)',
         })),
       );
   } else if (command === 'redrive') {
     const count = await admin.redrive(subscriber, type);
     console.log(`events: redrove ${count} dead letter(s) of ${type} for ${subscriber}`);
   } else if (command === 'drop') {
-    const count = await admin.drop(subscriber, type);
-    console.log(`events: dropped ${count} dead letter(s) of ${type} for ${subscriber}`);
+    // A pair no module handles keeps its pending deliveries forever: drop those too.
+    const retired = !isHandled(subscriber, type);
+    const count = await admin.drop(subscriber, type, { retired });
+    console.log(
+      retired
+        ? `events: dropped ${count} dead or pending delivery(ies) of ${type} for ${subscriber} (no module handles it)`
+        : `events: dropped ${count} dead letter(s) of ${type} for ${subscriber}`,
+    );
   } else {
     const from = since as Date;
     const oldest = EventsAdmin.oldestReplayable(new Date());

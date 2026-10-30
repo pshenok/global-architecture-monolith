@@ -65,6 +65,7 @@ own lines), `drizzle-orm` with `drizzle-kit` (same exact RC), `nestjs-cls` with
 | jose remote JWKS    | `createRemoteJWKSet` fetches on the request path and fails requests while the IdP is down                                                                    | `IdpKeySet`: background refresh, last good keys, 503 after `AUTH_JWKS_MAX_STALE_S` |
 | Fastify deadlines   | Node's `requestTimeout` covers only plain HTTP/1, not HTTP/2 or TLS                                                                                          | `handlerTimeout` in `createAdapter` + 504 `REQUEST_TIMEOUT` in the filter          |
 | Node timers         | a timer above 2^31-1 ms fires at once, timing every request out                                                                                              | `REQUEST_TIMEOUT_MS` capped at 600000                                              |
+| Fastify trustProxy  | a hop count (`trustProxy: 1`) is refused by Fastify 5.12 and would trust any peer                                                                            | `TRUST_PROXY` takes `false`, `true` or addresses/CIDRs; a number fails boot        |
 | Fastify docs page   | raw responses skip `onSend` hooks                                                                                                                            | `/docs` CSP set by a middleware in `http/openapi.ts`                               |
 | pg pool             | an idle client error emitted on the pool crashes the process when unhandled                                                                                  | `pool.on('error', ...)` in `DatabaseModule`                                        |
 | PM2                 | `@` in the interpreter path is read as an nvm version                                                                                                        | interpreter `node_modules/.bin/node`                                               |
@@ -87,6 +88,14 @@ own lines), `drizzle-orm` with `drizzle-kit` (same exact RC), `nestjs-cls` with
   - the handler and the acknowledgement stay in one transaction (that is why no
     `processed_events` exists), and `CrossModuleCallInTransactionError` stays a dead letter
     (`classifyFailure` in `retry.ts`);
+  - the attempt is counted by the lease, committed before the handler runs, so a delivery
+    that kills the process still runs out of attempts; the lease (twice
+    `EVENTS_HANDLER_TIMEOUT_MS` plus 5 s) outlasts the handler's deadline, and every
+    write after it checks the lease (`attempts` unchanged), so a late replica cannot
+    settle a delivery another one re-leased;
+  - only pairs this build handles are leased (rolling deploys); keep the tests "counts
+    the attempt before the handler runs", "gives up ... ATTEMPTS_EXHAUSTED", "retries
+    HANDLER_TIMEOUT" and "leaves unhandled pairs pending" green;
   - the schema lives in `src/events/tables.ts`; a change is a platform migration
     (`pnpm --filter @gam/platform db:generate --name <change>`), applied first everywhere
     through `PLATFORM_MIGRATIONS`;
@@ -95,8 +104,13 @@ own lines), `drizzle-orm` with `drizzle-kit` (same exact RC), `nestjs-cls` with
   - no health checks for events; shutdown stays bounded (`EVENTS_DRAIN_MS`, at most 14000,
     under PM2's `kill_timeout` of 15000).
 - `ModuleApi` (`src/platform/module-api.ts`) detects the caller's transaction through
-  nestjs-cls's `TransactionHost`; keep its test ("refuses a call inside the caller
-  transaction, and only there") green when nestjs-cls moves.
+  nestjs-cls's `TransactionHost` and wraps every method and accessor up the prototype
+  chain; `ModuleApiCheck` fails boot on a method written as a field. Keep its tests
+  ("refuses a call inside the caller transaction, and only there", the inherited, getter
+  and symbol shapes) green when nestjs-cls moves.
+- The request context (`src/auth/actor-context.ts`) keeps the actor and event under
+  private symbols and returns only actors the kit minted; check-access refuses
+  `nestjs-cls` imports outside the kit. Keep both when nestjs-cls changes its API.
 - `templates/module`: after any change run `pnpm template:verify`. It generates
   `zz-template-check` (`modules/zz-template-checks`), mounts it, runs Biome, typecheck,
   oxlint, check-access, check-boundaries, its tests, builds the app and runs the app's

@@ -84,11 +84,12 @@ Wiring: the class is in the Nest module's `providers` and `exports`
 (`imports: [HousesModule]`) to inject it (`gam-module-communication`).
 
 Rules:
-- **Every method is `async`** and returns plain data. `@ModuleApi()` wraps each method
-  defined on the class itself so that it rejects with `CrossModuleCallInTransactionError`
-  when the caller has a transaction open (`UnitOfWork.run`, or an event handler). Getters,
-  fields and inherited methods are not wrapped: declare every member as a method of the
-  class.
+- **Every method is `async`** and returns plain data. `@ModuleApi()` wraps every method
+  (inherited and symbol-keyed ones included) so that it rejects with
+  `CrossModuleCallInTransactionError` when the caller has a transaction open
+  (`UnitOfWork.run`, or an event handler); accessors throw it. A method written as a
+  class field (`find = async () => ...`) cannot be wrapped, so the app refuses to start
+  with one (`ModuleApiCheck`): declare every member as a method of the class.
 - **Answer in the provider's language.** Return a summary type (`HouseSummary`), copies of
   values (`{ ...house.nightlyPrice }`), never an aggregate or a row. The caller's adapter
   maps it to its own terms (`HouseTerms`), so neither domain leaks into the other.
