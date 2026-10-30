@@ -1,0 +1,35 @@
+{
+  "name": "@gam/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The monolith: one HTTPS (HTTP/2 + HTTP/1.1) REST API serving every feature module, plus its release and operator commands.",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "swc src -d dist --strip-leading-paths --config-file ../../.swcrc --ignore \"**/*.spec.ts\" && node ../../tools/check-esm.ts",
+    "start": "node --enable-source-maps --env-file-if-exists=.env --import @gam/platform/telemetry dist/main.js",
+    "dev": "node ../../tools/dev.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "db:migrate": "node --env-file-if-exists=.env dist/migrate.js",
+    "role": "node --env-file-if-exists=.env dist/cli/role.js",
+    "events": "node --env-file-if-exists=.env dist/cli/events.js"
+  },
+  "dependencies": {
+    "@gam/bookings": "workspace:*",
+    "@gam/houses": "workspace:*",
+    "@gam/kernel": "workspace:*",
+    "@gam/platform": "workspace:*",
+    "@gam/users": "workspace:*",
+    "@nestjs/common": "catalog:",
+    "@nestjs/core": "catalog:",
+    "@nestjs/platform-fastify": "catalog:",
+    "drizzle-orm": "catalog:",
+    "nestjs-pino": "catalog:",
+    "reflect-metadata": "catalog:",
+    "zod": "catalog:"
+  }
+}

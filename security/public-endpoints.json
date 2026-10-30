@@ -1,0 +1,30 @@
+{
+  "$comment": "Every route that does not need a registered user (ADR-0004): public (anyone) and identity (a verified login without a user, registration). `where` is file#Class.method. tools/check-access.ts (pnpm lint) compares this list with the source; the app's tests compare it with the policies the AuthGuard enforces, recorded at boot. Changes are reviewed by the code owners of security/.",
+  "endpoints": [
+    {
+      "where": "modules/houses/src/transport/http/houses.controller.ts#HousesController.get",
+      "access": "public",
+      "reason": "world-readable catalogue"
+    },
+    {
+      "where": "modules/houses/src/transport/http/houses.controller.ts#HousesController.list",
+      "access": "public",
+      "reason": "world-readable catalogue"
+    },
+    {
+      "where": "modules/users/src/transport/http/users.controller.ts#UsersController.register",
+      "access": "identity",
+      "reason": "login without a user"
+    },
+    {
+      "where": "packages/platform/src/http/health.controller.ts#HealthController.live",
+      "access": "public",
+      "reason": "liveness and readiness probes"
+    },
+    {
+      "where": "packages/platform/src/http/health.controller.ts#HealthController.ready",
+      "access": "public",
+      "reason": "liveness and readiness probes"
+    }
+  ]
+}
