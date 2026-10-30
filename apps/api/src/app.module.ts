@@ -20,6 +20,7 @@ import { ConfigSchema } from './config.ts';
     UsersModule,
     HousesModule,
     BookingsModule,
+    // pnpm new:module adds feature modules above this line
   ],
 })
 export class AppModule {}

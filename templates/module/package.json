@@ -1,0 +1,37 @@
+{
+  "name": "@gam/sample-items",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sample items module (generated from templates/module by pnpm new:module).",
+  "type": "module",
+  "files": [
+    "dist",
+    "drizzle"
+  ],
+  "exports": {
+    ".": {
+      "@gam/source": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "swc src -d dist --strip-leading-paths --config-file ../../.swcrc --ignore \"**/*.spec.ts\" && node ../../tools/check-esm.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@gam/kernel": "workspace:*",
+    "@gam/platform": "workspace:*",
+    "@nestjs/common": "catalog:",
+    "@nestjs/swagger": "catalog:",
+    "drizzle-orm": "catalog:",
+    "fastify": "catalog:",
+    "reflect-metadata": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "drizzle-kit": "catalog:"
+  }
+}

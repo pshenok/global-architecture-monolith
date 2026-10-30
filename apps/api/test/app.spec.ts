@@ -1,4 +1,7 @@
-import { eventCatalog } from '@gam/platform';
+import { readFileSync } from 'node:fs';
+import * as bookings from '@gam/bookings';
+import * as houses from '@gam/houses';
+import { eventCatalog, IdentityResolver, isModuleApi } from '@gam/platform';
 import {
   createTestApp,
   createTestDatabase,
@@ -7,6 +10,7 @@ import {
   type TestApp,
   type TestDatabase,
 } from '@gam/platform/testing';
+import * as users from '@gam/users';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module.ts';
 import { parseSince } from '../src/cli/parse-since.ts';
@@ -125,15 +129,17 @@ describe('the app', () => {
 
   it('publishes one OpenAPI document with bearer security on every non-public operation', async () => {
     const document = (await call('GET', '/openapi.json')).body;
-    expect(Object.keys(document.paths).sort()).toEqual([
-      '/v1/bookings',
-      '/v1/bookings/{id}',
-      '/v1/bookings/{id}/cancel',
-      '/v1/houses',
-      '/v1/houses/{id}',
-      '/v1/users',
-      '/v1/users/{id}',
-    ]);
+    expect(Object.keys(document.paths)).toEqual(
+      expect.arrayContaining([
+        '/v1/bookings',
+        '/v1/bookings/{id}',
+        '/v1/bookings/{id}/cancel',
+        '/v1/houses',
+        '/v1/houses/{id}',
+        '/v1/users',
+        '/v1/users/{id}',
+      ]),
+    );
     const body = document.paths['/v1/users'].post.requestBody.content['application/json'].schema;
     expect(body).toEqual({ $ref: '#/components/schemas/RegisterUserBody' });
     const operations = Object.entries(document.paths).flatMap(([path, item]) =>
@@ -171,8 +177,14 @@ describe('operator commands', () => {
     expect(eventCatalog()).toHaveLength(3);
   });
 
-  it('apply the platform migrations first', () => {
-    expect(MIGRATIONS.map((set) => set.name)).toEqual(['platform', 'users', 'houses', 'bookings']);
+  it('apply the platform migrations first, then every module of modules.json', () => {
+    const registry = JSON.parse(
+      readFileSync(new URL('../../../modules.json', import.meta.url), 'utf8'),
+    ) as { modules: { name: string }[] };
+    expect(MIGRATIONS.map((set) => set.name)).toEqual([
+      'platform',
+      ...registry.modules.map((module) => module.name),
+    ]);
   });
 
   it('take --since only as a full ISO time with a zone', () => {
@@ -185,5 +197,21 @@ describe('operator commands', () => {
       expect(parseSince(typo)).toBeUndefined();
     }
     expect(parseSince(undefined)).toBeUndefined();
+  });
+
+  it('find in each module public API only its Nest module and ModuleApi classes', () => {
+    for (const [name, exports] of Object.entries({ users, houses, bookings })) {
+      for (const [key, value] of Object.entries(exports)) {
+        if (typeof value !== 'function') continue;
+        const allowed =
+          key.endsWith('Module') ||
+          isModuleApi(value) ||
+          (value as { prototype?: unknown }).prototype instanceof IdentityResolver;
+        expect(
+          allowed,
+          `${name} exports ${key}, neither its Nest module nor a @ModuleApi class`,
+        ).toBe(true);
+      }
+    }
   });
 });

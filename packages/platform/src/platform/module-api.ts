@@ -15,6 +15,13 @@ export class CrossModuleCallInTransactionError extends Error {
   }
 }
 
+const moduleApis = new WeakSet<object>();
+
+/** Whether a class is a module's public API (decorated with @ModuleApi). */
+export function isModuleApi(type: unknown): boolean {
+  return typeof type === 'function' && moduleApis.has(type);
+}
+
 function inTransaction(): boolean {
   try {
     return TransactionHost.getInstance().isTransactionActive();
@@ -37,6 +44,7 @@ function inTransaction(): boolean {
  */
 export function ModuleApi(): ClassDecorator {
   return (target) => {
+    moduleApis.add(target);
     const prototype = target.prototype as Record<string, unknown>;
     for (const name of Object.getOwnPropertyNames(prototype)) {
       if (name === 'constructor') continue;

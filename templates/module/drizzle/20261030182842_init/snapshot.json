@@ -1,0 +1,204 @@
+{
+  "type": "base",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "59809613-32ef-433b-a6f0-ebaddff048e8",
+  "prevIds": [
+    "00000000-0000-0000-0000-000000000000"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_schema",
+      "statementTarget": [
+        "schema",
+        "sample_items"
+      ],
+      "writes": [
+        "s|sch|sample_items",
+        "n|sch|sample_items",
+        "e|sch|sample_items"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "sample_items",
+        "sample_items"
+      ],
+      "writes": [
+        "s|tbl|sample_items.sample_items",
+        "n|tbl|sample_items.sample_items",
+        "e|tbl|sample_items.sample_items",
+        "n|rel|sample_items.sample_items",
+        "n|type|sample_items.sample_items",
+        "n|rel|sample_items.sample_items_pkey",
+        "n|rel|sample_items.sample_items_owner_id_name_key"
+      ],
+      "reads": [
+        "n|sch|sample_items"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "sample_items",
+        "sample_items",
+        "sample_items_owner_id_id_idx"
+      ],
+      "writes": [
+        "s|idx|sample_items.sample_items_owner_id_id_idx",
+        "n|idx|sample_items.sample_items_owner_id_id_idx",
+        "e|idx|sample_items.sample_items_owner_id_id_idx",
+        "n|rel|sample_items.sample_items_owner_id_id_idx"
+      ],
+      "reads": [
+        "n|tbl|sample_items.sample_items",
+        "n|sch|sample_items",
+        "n|col|sample_items.sample_items.owner_id",
+        "n|col|sample_items.sample_items.id"
+      ]
+    }
+  ],
+  "ddl": [
+    {
+      "name": "sample_items",
+      "entityType": "schemas"
+    },
+    {
+      "schema": "sample_items",
+      "name": "sample_items",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "sample_items",
+      "table": "sample_items",
+      "name": "id",
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "sample_items",
+      "table": "sample_items",
+      "name": "owner_id",
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "sample_items",
+      "table": "sample_items",
+      "name": "name",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "sample_items",
+      "table": "sample_items",
+      "name": "description",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "''",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "sample_items",
+      "table": "sample_items",
+      "name": "created_at",
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "sample_items",
+      "table": "sample_items",
+      "name": "updated_at",
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "sample_items",
+      "table": "sample_items",
+      "name": "sample_items_owner_id_id_idx",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "owner_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "sample_items",
+      "table": "sample_items",
+      "name": "sample_items_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "sample_items",
+      "table": "sample_items",
+      "name": "sample_items_owner_id_name_key",
+      "nameExplicit": true,
+      "columns": [
+        "owner_id",
+        "name"
+      ],
+      "nullsNotDistinct": false,
+      "entityType": "uniques"
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+# Security-sensitive paths (ADR-0004): changes need the platform owner's review.
+# Guardrail code, the platform kit (the only code that may touch the raw HTTP server, mint
+# actors or read access metadata), the module boundaries, and everything that decides
+# whether and how the guardrails run.
+/.github/CODEOWNERS @pshenok
+/.github/workflows/ @pshenok
+/security/ @pshenok
+/packages/platform/src/ @pshenok
+/packages/platform/drizzle/ @pshenok
+/packages/kernel/src/actor.ts @pshenok
+/packages/kernel/src/testing.ts @pshenok
+/packages/kernel/src/index.ts @pshenok
+/apps/api/src/app.module.ts @pshenok
+/apps/api/src/main.ts @pshenok
+/apps/api/test/access-probes/ @pshenok
+/modules/houses/test/access-probes/ @pshenok
+/modules/houses/test/boundary-probes/ @pshenok
+/modules.json @pshenok
+/tools/check-access.ts @pshenok
+/tools/check-boundaries.ts @pshenok
+/tools/lib.ts @pshenok
+/tools/verify-template.ts @pshenok
+/package.json @pshenok
+/pnpm-workspace.yaml @pshenok
+/turbo.json @pshenok
+/vitest.shared.ts @pshenok
+/.swcrc @pshenok
+/tsconfig.json @pshenok
+/tsconfig.base.json @pshenok
+/apps/*/package.json @pshenok
+/apps/*/tsconfig.json @pshenok
+/apps/*/vitest.config.ts @pshenok
+/modules/*/package.json @pshenok
+/modules/*/tsconfig.json @pshenok
+/modules/*/vitest.config.ts @pshenok
+/packages/*/package.json @pshenok
+/packages/*/tsconfig.json @pshenok
+/packages/*/vitest.config.ts @pshenok
+/templates/module/package.json @pshenok
+/templates/module/tsconfig.json @pshenok
+/templates/module/vitest.config.ts @pshenok
+**/biome.json @pshenok
+**/biome.jsonc @pshenok
+**/.oxlintrc* @pshenok
+**/oxlint.config.* @pshenok

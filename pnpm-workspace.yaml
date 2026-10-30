@@ -2,6 +2,8 @@ packages:
   - apps/*
   - modules/*
   - packages/*
+  # Compiled and tested like a module, but never mounted: pnpm new:module copies it.
+  - templates/*
 
 # ---- supply chain (pnpm 12) -------------------------------------------------
 # New versions become installable only after 24h; transitive deps may not come

@@ -1,4 +1,10 @@
-export { Access, type AccessPolicy, type PublicOptions } from './auth/access.ts';
+export {
+  ACCESS_POLICY,
+  Access,
+  type AccessPolicy,
+  PUBLIC_EXTENSION,
+  type PublicOptions,
+} from './auth/access.ts';
 export { AccessRoutes, type OpenRoute } from './auth/access-routes.ts';
 export {
   currentActor,
@@ -64,7 +70,11 @@ export { ProblemDetails, toProblemDetails } from './http/problem-details.ts';
 export { IdParam, keysetPaging, MoneyView, PageQuery, pageOf } from './http/schemas.ts';
 export { type LoggerConfig, loggerParams, REDACT_PATHS } from './logging/logger-params.ts';
 export { SystemClock, UuidV7IdGenerator } from './platform/core-providers.ts';
-export { CrossModuleCallInTransactionError, ModuleApi } from './platform/module-api.ts';
+export {
+  CrossModuleCallInTransactionError,
+  isModuleApi,
+  ModuleApi,
+} from './platform/module-api.ts';
 export {
   type IdentitiesOption,
   PlatformModule,

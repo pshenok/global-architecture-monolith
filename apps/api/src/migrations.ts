@@ -9,4 +9,5 @@ export const MIGRATIONS: readonly MigrationSet[] = [
   USERS_MIGRATIONS,
   HOUSES_MIGRATIONS,
   BOOKINGS_MIGRATIONS,
+  // pnpm new:module adds migration sets above this line
 ];
