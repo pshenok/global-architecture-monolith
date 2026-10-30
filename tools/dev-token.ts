@@ -1,5 +1,5 @@
 /**
- * Prints an access token from the local dev IdP (tools/dev-idp.ts, part of pnpm stack:up):
+ * Prints an access token from the local dev IdP (tools/dev-idp/main.ts, part of pnpm stack:up):
  *   pnpm dev:token <sub> [--email a@x.io] [--unverified] [--ttl 900]
  *   curl -H "authorization: Bearer $(pnpm -s dev:token alice --email alice@x.io)" ...
  */

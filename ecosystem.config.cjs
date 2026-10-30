@@ -6,7 +6,7 @@ const registry = require('./modules.json');
 
 const CERTS = `${__dirname}/.certs`;
 
-/** The local OIDC provider (tools/dev-idp.ts) the API trusts; dev only. */
+/** The local OIDC provider (tools/dev-idp/main.ts) the API trusts; dev only. */
 const devIdp = `http://127.0.0.1:${registry.devIdp.port}`;
 const AUTH_ISSUERS = JSON.stringify([
   {
@@ -64,7 +64,7 @@ module.exports = {
       ...common,
       name: 'gam-dev-idp',
       cwd: __dirname,
-      script: 'tools/dev-idp.ts',
+      script: 'tools/dev-idp/main.ts',
       node_args: ['--enable-source-maps'],
       env: { NODE_ENV: 'development' },
     },
