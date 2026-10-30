@@ -1,0 +1,9 @@
+{
+  "name": "gam-platform",
+  "version": "0.1.0",
+  "description": "Engineering skills for the global-architecture-monolith modular monolith: architecture rules, new modules from the template, module public APIs and event contracts, domain logic, a Postgres schema per module with Drizzle, calls and events between modules, HTTP endpoints, testing, local stack, code review and platform maintenance.",
+  "author": { "name": "pshenok" },
+  "homepage": "https://github.com/pshenok/global-architecture-monolith",
+  "repository": "https://github.com/pshenok/global-architecture-monolith",
+  "keywords": ["nestjs", "modular-monolith", "clean-architecture", "drizzle", "postgres", "fastify"]
+}

@@ -8,7 +8,7 @@ import { SampleItemsController } from './transport/http/sample-items.controller.
  * The sample items module. Composition root: the only place where its ports are bound to
  * adapters. When other modules need it, add a ModuleApi class in src/transport/api and
  * export it here and from src/index.ts; to publish or handle events, import
- * EventsModule.forFeature (the gam-service-communication skill).
+ * EventsModule.forFeature (the gam-module-communication skill).
  */
 @Module({
   controllers: [SampleItemsController],

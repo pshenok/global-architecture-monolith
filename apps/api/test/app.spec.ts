@@ -1,6 +1,4 @@
 import { readFileSync } from 'node:fs';
-import * as bookings from '@gam/bookings';
-import * as houses from '@gam/houses';
 import { eventCatalog, IdentityResolver, isModuleApi } from '@gam/platform';
 import {
   createTestApp,
@@ -10,7 +8,6 @@ import {
   type TestApp,
   type TestDatabase,
 } from '@gam/platform/testing';
-import * as users from '@gam/users';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module.ts';
 import { parseSince } from '../src/cli/parse-since.ts';
@@ -199,8 +196,12 @@ describe('operator commands', () => {
     expect(parseSince(undefined)).toBeUndefined();
   });
 
-  it('find in each module public API only its Nest module and ModuleApi classes', () => {
-    for (const [name, exports] of Object.entries({ users, houses, bookings })) {
+  it('find in each module public API, among its classes, only its Nest module, ModuleApi classes and platform ports', async () => {
+    const registry = JSON.parse(
+      readFileSync(new URL('../../../modules.json', import.meta.url), 'utf8'),
+    ) as { modules: { package: string }[] };
+    for (const { package: name } of registry.modules) {
+      const exports = (await import(name)) as Record<string, unknown>;
       for (const [key, value] of Object.entries(exports)) {
         if (typeof value !== 'function') continue;
         const allowed =
@@ -209,7 +210,7 @@ describe('operator commands', () => {
           (value as { prototype?: unknown }).prototype instanceof IdentityResolver;
         expect(
           allowed,
-          `${name} exports ${key}, neither its Nest module nor a @ModuleApi class`,
+          `${name} exports ${key}, neither its Nest module, a @ModuleApi class nor a platform port`,
         ).toBe(true);
       }
     }

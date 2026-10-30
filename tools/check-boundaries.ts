@@ -19,8 +19,9 @@
  *    source names no other module's schema, nor the platform's `events` schema, in an SQL
  *    string: other modules' data comes through their public API or their events.
  * 4. Registry. Every module of modules.json is a workspace package at its `dir`, named
- *    `package`, and a dependency of the api app (which mounts it), and every folder in
- *    modules/ is in modules.json.
+ *    `package`, a dependency of the api app, and imported by the app's app.module.ts (it
+ *    mounts it) and migrations.ts (it migrates it); every folder in modules/ is in
+ *    modules.json.
  *
  * Every run first checks itself on the probes in modules/houses/test/boundary-probes,
  * read as houses' src: a line marked `// refused` must be refused, and no other line.
@@ -295,8 +296,15 @@ function checkSchemaFiles(): void {
 
 // ---- 4. Registry --------------------------------------------------------------------
 
-function checkRegistry(): void {
+function checkRegistry(read: (path: string) => SourceFile | undefined): void {
   const api = packages.get(registry.api.package);
+  const imported = (file: string) => {
+    const source = read(join(ROOT, registry.api.dir, file));
+    if (!source) problems.push(`${registry.api.dir}/${file}: cannot be read`);
+    return new Set(source ? specifiers(source).map(({ text }) => text) : []);
+  };
+  const mounted = imported('src/app.module.ts');
+  const migrated = imported('src/migrations.ts');
   if (!api) problems.push(`modules.json: the api package ${registry.api.package} does not exist`);
   for (const module of registry.modules) {
     const pkg = byDir.get(module.dir);
@@ -308,6 +316,16 @@ function checkRegistry(): void {
     if (api && !api.dependencies.has(module.package)) {
       problems.push(
         `${registry.api.dir}/package.json: does not depend on the module ${module.package}, so the app does not mount it`,
+      );
+    }
+    if (!mounted.has(module.package)) {
+      problems.push(
+        `${registry.api.dir}/src/app.module.ts: does not import ${module.package}, so the app does not mount it`,
+      );
+    }
+    if (!migrated.has(module.package)) {
+      problems.push(
+        `${registry.api.dir}/src/migrations.ts: does not import ${module.package}, so its migrations never apply`,
       );
     }
   }
@@ -391,7 +409,7 @@ try {
   const read = (path: string) =>
     snapshot.getDefaultProjectForFile(path)?.program.getSourceFile(path);
   checkPackages();
-  checkRegistry();
+  checkRegistry(read);
   checkSchemaFiles();
   for (const pkg of packages.values()) {
     for (const folder of ['src', 'test']) {

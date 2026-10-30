@@ -1,0 +1,17 @@
+{
+  "name": "global-architecture-monolith",
+  "owner": {
+    "name": "pshenok"
+  },
+  "metadata": {
+    "description": "Skills and tooling for building feature modules on the global-architecture-monolith platform.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "gam-platform",
+      "source": "./plugins/gam-platform",
+      "description": "Platform skills: architecture, new modules, module APIs, domain logic, database, module communication and events, HTTP endpoints, testing, local stack, review, maintenance."
+    }
+  ]
+}

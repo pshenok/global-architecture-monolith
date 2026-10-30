@@ -191,6 +191,6 @@ Next (the gam-new-module skill has the details):
   1. Domain + use cases: src/domain/${singular.kebab}.ts, ${singular.kebab}.errors.ts, src/application/
   2. Persistence: edit schema.ts, then rm -r ${entry.dir}/drizzle && pnpm --filter ${entry.package} db:generate --name init
   3. HTTP: src/transport/http/ (schemas, controller with @Access on every route)
-  4. Other modules: gam-service-communication (public API, ports, events)
+  4. Other modules: gam-module-communication (public API, ports, events)
   5. Tests: pnpm --filter ${entry.package} test, then pnpm --filter @gam/api test
 `);
