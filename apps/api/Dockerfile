@@ -4,7 +4,7 @@
 # Migrations are a separate release step: run `node dist/migrate.js` with the same image.
 
 FROM node:26-trixie-slim AS build
-RUN npm install --global pnpm@12.15.0
+RUN npm install --global pnpm@12.16.1
 WORKDIR /repo
 COPY . .
 RUN pnpm install --frozen-lockfile \

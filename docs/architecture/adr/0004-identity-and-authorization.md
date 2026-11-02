@@ -170,9 +170,15 @@ fields. Rules:
 
 ### Local development
 
-`pnpm stack:up` runs a loopback-only OIDC provider (`tools/dev-idp.ts`, refuses
-production). `pnpm dev:token <sub> --email ...` prints a token. See
-`docs/architecture/identity-providers.md` for adopting a real provider.
+`pnpm stack:up` runs a loopback-only OIDC provider (`tools/dev-idp/main.ts`, refuses
+production). `pnpm dev:token <sub> --email ...` prints a token. Browser clients (the
+BFF in `global-architecture-web`) sign in through its authorization code flow with
+PKCE: a sign-in form that takes any subject, ID tokens, refresh tokens that rotate on
+every use (a reused one revokes the login) and RP-initiated logout. Clients are
+registered in `modules.json` (`devIdp.clients`) with a committed, labelled
+non-secret. One issuer for both paths means `pnpm dev:token alice` and a web login as
+alice are the same platform user. See `docs/architecture/identity-providers.md` for
+adopting a real provider and what a BFF client needs from it.
 
 ## Rejected alternatives
 

@@ -24,9 +24,12 @@ runs `db:setup`, applies every migration set with the stack's `DATABASE_URL`
 (`postgresql://gam:gam@localhost:5432/gam`), then starts or reloads `ecosystem.config.cjs`:
 - `gam-api`: `apps/api/dist/main.js` on `https://localhost:9443` (`modules.json`
   `api.httpsPort`), HTTP/2 + HTTP/1.1;
-- `gam-dev-idp`: `tools/dev-idp.ts`, a local OIDC provider on `http://127.0.0.1:9090`
+- `gam-dev-idp`: `tools/dev-idp/main.ts`, a local OIDC provider on `http://127.0.0.1:9090`
   (`devIdp.port`) that signs any subject it is asked for; loopback only, refuses
-  `NODE_ENV=production`.
+  `NODE_ENV=production`. Besides `pnpm dev:token` it runs the authorization code flow
+  for the browser clients in `modules.json` `devIdp.clients` (global-architecture-web):
+  a sign-in form at `/authorize`, rotating refresh tokens and `/end-session`. Codes and
+  refresh tokens live in memory, so restarting it ends web sessions at their next refresh.
 
 It waits up to 60 s until `/readyz` answers 200 with `status: "ok"` (the database answered
 and the IdP's keys are loaded), then prints the API (`https://localhost:9443/v1/...`), the

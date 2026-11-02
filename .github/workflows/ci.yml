@@ -39,7 +39,7 @@ jobs:
           node-version: "26"
 
       - name: Install pnpm (the repo pins Node and pnpm via devEngines)
-        run: npm install --global pnpm@12.15.0
+        run: npm install --global pnpm@12.16.1
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:setup

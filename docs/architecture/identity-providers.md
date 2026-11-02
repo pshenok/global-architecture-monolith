@@ -2,7 +2,7 @@
 
 The API trusts OIDC access tokens of the providers in `AUTH_ISSUERS` (ADR-0004). The
 provider is a deployment decision; nothing in the modules depends on it. Locally the
-stack runs `tools/dev-idp.ts`, a loopback-only provider that signs any subject it is
+stack runs `tools/dev-idp/main.ts`, a loopback-only provider that signs any subject it is
 asked for (it refuses `NODE_ENV=production`).
 
 ## What the API needs from a provider
@@ -32,6 +32,24 @@ asked for (it refuses `NODE_ENV=production`).
 `issuer` must equal the tokens' `iss` exactly (trailing slash included). URIs must be
 https except loopback outside production. `requiredTyp` is optional because providers
 differ (RFC 9068 says `at+jwt`).
+
+## What a browser (BFF) client needs
+
+A server-side web client such as `global-architecture-web` signs users in with its own
+client registration at the same provider, and sends the access tokens it receives here.
+
+| Need                                        | Why                                                                        |
+| ------------------------------------------- | -------------------------------------------------------------------------- |
+| a confidential client with code flow + PKCE | tokens stay on the web server; the browser only holds a session cookie     |
+| access tokens with the API's `aud`          | the API refuses tokens minted for other audiences (ID tokens included)     |
+| refresh tokens (`offline_access`)           | sessions outlive short access tokens; prefer rotation with reuse detection |
+| `end_session_endpoint`                      | signing out of the web also ends the provider's session                    |
+| `iss` in authorization responses (RFC 9207) | mix-up defense in the client                                               |
+
+Locally the dev IdP offers all of it for the clients in `modules.json`
+(`devIdp.clients`): `GET /authorize` shows a sign-in form that takes any subject and an
+access-token lifetime (short ones exercise refresh), and a rotated refresh token
+presented again revokes the login, so refresh races in a client fail locally.
 
 ## Email policy
 

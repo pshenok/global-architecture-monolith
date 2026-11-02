@@ -17,11 +17,22 @@ export interface ModuleEntry {
   extensions?: string[];
 }
 
+/** A browser client of the dev IdP's code flow, e.g. global-architecture-web's BFF. */
+export interface DevIdpClient {
+  clientId: string;
+  /** A committed, labelled non-secret: the dev IdP signs any subject anyway. */
+  clientSecret: string;
+  /** `aud` of the access tokens it gets (the API's audience). */
+  audience: string;
+  redirectUris: string[];
+  postLogoutRedirectUris: string[];
+}
+
 export interface Registry {
   $comment: string;
   api: { name: string; dir: string; package: string; httpsPort: number; database: string };
-  /** Local OIDC provider of the stack (tools/dev-idp.ts). */
-  devIdp: { port: number };
+  /** Local OIDC provider of the stack (tools/dev-idp/main.ts) and its browser clients. */
+  devIdp: { port: number; clients?: DevIdpClient[] };
   /** The database the role may create per-test databases from. */
   testDatabase: string;
   modules: ModuleEntry[];
